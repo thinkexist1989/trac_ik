@@ -31,110 +31,26 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <trac_ik/trac_ik.hpp>
 #include <Eigen/Geometry>
-#include <rclcpp/rclcpp.hpp>
+#include <chrono>
+#include <atomic>
+#include <cstdio>
+#include <iostream>
 #include <limits>
-#include <kdl_parser/kdl_parser.hpp>
-#include <urdf/model.hpp>
+#include <trac_ik/urdf.hpp>
+#include <stdexcept>
 
 namespace TRAC_IK
 {
 
-TRAC_IK::TRAC_IK(rclcpp::Node::SharedPtr _nh, const std::string& _base_link, const std::string& _tip_link, const std::string& _URDF_param, double _maxtime, double _eps, SolveType _type) :
-  logger(_nh->get_logger()),
-  initialized(false),
-  eps(_eps),
-  maxtime(_maxtime),
-  solvetype(_type)
+TRAC_IK::TRAC_IK(const std::string& base, const std::string& tip, const std::string& xml,
+                     double timeout, double tolerance, SolveType type) :
+  initialized(false), eps(tolerance), maxtime(timeout), solvetype(type)
 {
-
-  urdf::Model robot_model;
-  std::string xml_string;
-
-  if(!_nh->has_parameter(_URDF_param))
-    xml_string = _nh->declare_parameter(_URDF_param, std::string(""));
-  else
-    _nh->get_parameter(_URDF_param, xml_string);
-
-  if(xml_string.empty())
-  {
-    RCLCPP_FATAL(_nh->get_logger(), "Could not load the xml from parameter: %s", _URDF_param.c_str());
-    return;
-  }
-
-  if (!robot_model.initString(xml_string))
-  {
-    RCLCPP_FATAL(logger, "Unable to initialize urdf::Model from robot description.");
-    return;
-  }
-
-  RCLCPP_DEBUG(logger, "Reading joints and links from URDF");
-
-  KDL::Tree tree;
-
-  if (!kdl_parser::treeFromUrdfModel(robot_model, tree))
-    RCLCPP_FATAL(logger, "Failed to extract kdl tree from xml robot description");
-
-  if (!tree.getChain(_base_link, _tip_link, chain))
-    RCLCPP_FATAL(logger, "Couldn't find chain %s to %s", _base_link.c_str(), _tip_link.c_str());
-
-  std::vector<KDL::Segment> chain_segs = chain.segments;
-
-  urdf::JointConstSharedPtr joint;
-
-  std::vector<double> l_bounds, u_bounds;
-
-  lb.resize(chain.getNrOfJoints());
-  ub.resize(chain.getNrOfJoints());
-
-  uint joint_num = 0;
-  for (unsigned int i = 0; i < chain_segs.size(); ++i)
-  {
-    joint = robot_model.getJoint(chain_segs[i].getJoint().getName());
-    if (joint->type != urdf::Joint::UNKNOWN && joint->type != urdf::Joint::FIXED)
-    {
-      joint_num++;
-      float lower, upper;
-      int hasLimits;
-      if (joint->type != urdf::Joint::CONTINUOUS)
-      {
-        if (joint->safety)
-        {
-          lower = std::max(joint->limits->lower, joint->safety->soft_lower_limit);
-          upper = std::min(joint->limits->upper, joint->safety->soft_upper_limit);
-        }
-        else
-        {
-          lower = joint->limits->lower;
-          upper = joint->limits->upper;
-        }
-        hasLimits = 1;
-      }
-      else
-      {
-        hasLimits = 0;
-      }
-      if (hasLimits)
-      {
-        lb(joint_num - 1) = lower;
-        ub(joint_num - 1) = upper;
-      }
-      else
-      {
-        lb(joint_num - 1) = std::numeric_limits<float>::lowest();
-        ub(joint_num - 1) = std::numeric_limits<float>::max();
-      }
-      RCLCPP_DEBUG_STREAM(logger, "IK Using joint " << joint->name << " " << lb(joint_num - 1) << " " << ub(joint_num - 1));
-    }
-  }
-
+  loadURDFChain(xml, base, tip, chain, lb, ub);
   initialize();
 }
 
-TRAC_IK::TRAC_IK(rclcpp::Node::SharedPtr _nh, const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime, double _eps, SolveType _type):
-  TRAC_IK(_chain, _q_min, _q_max, _maxtime, _eps, _type, _nh->get_logger()) {}
-
-TRAC_IK::TRAC_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime, double _eps, SolveType _type, const rclcpp::Logger& _logger):
-  logger(_logger),
+TRAC_IK::TRAC_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime, double _eps, SolveType _type):
   initialized(false),
   chain(_chain),
   lb(_q_min),
@@ -148,9 +64,14 @@ TRAC_IK::TRAC_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KD
 
 void TRAC_IK::initialize()
 {
+  if (!std::isfinite(maxtime) || maxtime <= 0 || !std::isfinite(eps) || eps <= 0)
+    throw std::invalid_argument("Timeout and epsilon must be finite and positive");
 
-  assert(chain.getNrOfJoints() == lb.data.size());
-  assert(chain.getNrOfJoints() == ub.data.size());
+  if (chain.getNrOfJoints() == 0 || chain.getNrOfJoints() != lb.rows() || lb.rows() != ub.rows())
+    throw std::invalid_argument("Invalid chain or joint limit dimensions");
+  for (unsigned int i = 0; i < lb.rows(); ++i)
+    if (!std::isfinite(lb(i)) || !std::isfinite(ub(i)) || lb(i) > ub(i))
+      throw std::invalid_argument("Invalid joint limits");
 
   jacsolver.reset(new KDL::ChainJntToJacSolver(chain));
   resetSolvers();
@@ -222,8 +143,8 @@ bool TRAC_IK::runSolver(T1& solver, T2& other_solver,
 
   while (true)
   {
-    auto timediff = system_clock.now() - start_time;
-    auto time_left = fulltime - timediff.seconds();
+    auto timediff = std::chrono::steady_clock::now() - start_time;
+    auto time_left = fulltime - std::chrono::duration<double>(timediff).count();
 
     if (time_left <= 0)
       break;
@@ -277,8 +198,10 @@ bool TRAC_IK::runSolver(T1& solver, T2& other_solver,
       mtx_.unlock();
     }
 
-    if (!solutions.empty() && solvetype == Speed)
-      break;
+    {
+      std::lock_guard<std::mutex> lock(mtx_);
+      if (!solutions.empty() && solvetype == Speed) break;
+    }
 
     for (unsigned int j = 0; j < seed.data.size(); j++)
       if (types[j] == KDL::BasicJointType::Continuous)
@@ -408,14 +331,16 @@ Eigen::MatrixXd TRAC_IK::computeSingularValues(const KDL::JntArray& arr)
 int TRAC_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL::JntArray &q_out, const KDL::Twist& _bounds)
 {
 
+  if (q_init.rows() != chain.getNrOfJoints()) return -1;
+
   if (!initialized)
   {
-    RCLCPP_ERROR(logger, "TRAC-IK was not properly initialized with a valid chain or limits.  IK cannot proceed");
+    std::fprintf(stderr, "TRAC-IK was not properly initialized with a valid chain or limits.  IK cannot proceed");
     return -1;
   }
 
 
-  start_time = system_clock.now();
+  start_time = std::chrono::steady_clock::now();
 
   nl_solver->reset();
   iksolver->reset();

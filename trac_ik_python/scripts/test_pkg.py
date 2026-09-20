@@ -3,14 +3,18 @@
 from trac_ik_python.trac_ik import IK
 from numpy.random import random
 import time
+import argparse
+from pathlib import Path
 
 
 if __name__ == '__main__':
-    # roslaunch pr2_description upload_pr2.launch
-    # Needed beforehand
-
-    ik_solver = IK("torso_lift_link",
-                   "r_wrist_roll_link")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('urdf_file')
+    parser.add_argument('base_link')
+    parser.add_argument('tip_link')
+    args = parser.parse_args()
+    urdf = Path(args.urdf_file).read_text()
+    ik_solver = IK(args.base_link, args.tip_link, urdf_string=urdf)
 
     print("IK solver uses link chain:")
     print(ik_solver.link_names)

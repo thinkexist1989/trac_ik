@@ -1,5 +1,10 @@
-This package provides examples programs to use the standalone TRAC-IK solver and related code.
+# Standalone IK example
 
-Currently, there only exists an ik\_tests program that compares KDL's Pseudoinverse Jacobian IK solver with TRAC-IK.  The pr2_arm.launch files runs this test on the default PR2 robot's 7-DOF right arm chain.
+Build from the repository root, then run:
 
-###As of v1.4.3, this package is part of the ROS Indigo/Jade binaries: `sudo apt-get install ros-jade-trac-ik`
+```sh
+build/trac_ik_examples/ik_tests tests/robot.urdf base tip 100
+```
+
+Arguments: URDF file, base link, tip link, optional number of random samples.
+Every successful solution is checked against forward kinematics and joint limits.

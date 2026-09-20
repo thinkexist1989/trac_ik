@@ -34,8 +34,12 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <trac_ik/nlopt_ik.hpp>
 #include <kdl/chainjnttojacsolver.hpp>
-#include <rclcpp/rclcpp.hpp>
+#include <chrono>
+#include <atomic>
+#include <cstdio>
+#include <iostream>
 #include <thread>
+#include <stdexcept>
 #include <mutex>
 #include <memory>
 
@@ -47,10 +51,10 @@ enum SolveType { Speed, Distance, Manip1, Manip2, Manip3 };
 class TRAC_IK
 {
 public:
-  TRAC_IK(rclcpp::Node::SharedPtr _nh, const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime = 0.005, double _eps = 1e-5, SolveType _type = Speed);
-  TRAC_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime = 0.005, double _eps = 1e-5, SolveType _type = Speed, const rclcpp::Logger& logger = rclcpp::get_logger("trac_ik.trac_ik_lib"));
+  TRAC_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime = 0.005, double _eps = 1e-5, SolveType _type = Speed);
 
-  TRAC_IK(rclcpp::Node::SharedPtr _nh, const std::string& _base_link, const std::string& _tip_link, const std::string& _URDF_param = "robot_description", double _maxtime = 0.005, double _eps = 1e-5, SolveType _type = Speed);
+
+  TRAC_IK(const std::string& base, const std::string& tip, const std::string& urdf_xml, double timeout = 0.005, double epsilon = 1e-5, SolveType type = Speed);
 
   ~TRAC_IK();
 
@@ -82,9 +86,15 @@ public:
 
   bool setKDLLimits(KDL::JntArray& lb_, KDL::JntArray& ub_)
   {
+    if (lb_.rows() != chain.getNrOfJoints() || ub_.rows() != chain.getNrOfJoints())
+      throw std::invalid_argument("Wrong joint limit dimensions");
+    for (unsigned int i = 0; i < lb_.rows(); ++i)
+      if (!std::isfinite(lb_(i)) || !std::isfinite(ub_(i)) || lb_(i) > ub_(i))
+        throw std::invalid_argument("Invalid joint limits");
     lb = lb_;
     ub = ub_;
-    resetSolvers();
+    types.clear();
+    initialize();
     return true;
   }
 
@@ -107,7 +117,6 @@ public:
   }
 
 private:
-  rclcpp::Logger logger;
   bool initialized;
   KDL::Chain chain;
   KDL::JntArray lb, ub;
@@ -119,8 +128,7 @@ private:
   std::unique_ptr<NLOPT_IK::NLOPT_IK> nl_solver;
   std::unique_ptr<KDL::ChainIkSolverPos_TL> iksolver;
 
-  rclcpp::Clock system_clock;
-  rclcpp::Time start_time;
+  std::chrono::steady_clock::time_point start_time;
 
   template<typename T1, typename T2>
   bool runSolver(T1& solver, T2& other_solver,
@@ -171,7 +179,7 @@ private:
 
   void resetSolvers()
   {
-    nl_solver.reset(new NLOPT_IK::NLOPT_IK(chain, lb, ub, maxtime, eps, NLOPT_IK::SumSq, logger));
+    nl_solver.reset(new NLOPT_IK::NLOPT_IK(chain, lb, ub, maxtime, eps, NLOPT_IK::SumSq));
     iksolver.reset(new KDL::ChainIkSolverPos_TL(chain, lb, ub, maxtime, eps, true, true));
   }
 

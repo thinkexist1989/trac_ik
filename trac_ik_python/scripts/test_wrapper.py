@@ -1,24 +1,21 @@
 #!/usr/bin/env python
 
 from trac_ik_python.trac_ik_wrap import TRAC_IK
-import rospy
+import argparse
+from pathlib import Path
 from numpy.random import random
 import time
 
 
 if __name__ == '__main__':
-    # roslaunch pr2_description upload_pr2.launch
-    # Needed beforehand
-    urdf = rospy.get_param('/robot_description')
-    # params of constructor:
-    # base_link, tip_link, urdf_string, timeout, epsilon, solve_type="Speed"
-    # solve_type can be: Distance, Speed, Manipulation1, Manipulation2
-    ik_solver = TRAC_IK("torso_lift_link",
-                        "r_wrist_roll_link",
-                        urdf,
-                        0.005,  # default seconds
-                        1e-5,  # default epsilon
-                        "Speed")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('urdf_file')
+    parser.add_argument('base_link')
+    parser.add_argument('tip_link')
+    args = parser.parse_args()
+    urdf = Path(args.urdf_file).read_text()
+    ik_solver = TRAC_IK(args.base_link, args.tip_link, urdf, 0.005, 1e-5)
+
     print("Number of joints:")
     print(ik_solver.getNrOfJointsInChain())
     print("Joint names:")

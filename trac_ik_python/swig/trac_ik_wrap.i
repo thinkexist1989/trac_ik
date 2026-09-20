@@ -6,11 +6,7 @@
  %{
  /* Includes the header in the wrapper code */
  #include <trac_ik/trac_ik.hpp>
- #include <urdf/model.h>
- #include <ros/ros.h>
- #include <kdl_parser/kdl_parser.hpp>
  #include <limits>
- #include <tf_conversions/tf_kdl.h>
  %}
 
  // We need this or we will get on runtime
@@ -30,107 +26,24 @@ namespace std {
 // USEFUL DOCS: http://www.swig.org/Doc1.3/SWIG.html
 
 
-// Ignore original constructors as they are not useful in Python
-// Note the full namespacing
-%ignore TRAC_IK::TRAC_IK::TRAC_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime=0.005, double _eps=1e-5, SolveType _type=Speed);
-%ignore TRAC_IK::TRAC_IK::TRAC_IK(const std::string& base_link, const std::string& tip_link, const std::string& URDF_param="/robot_description", double _maxtime=0.005, double _eps=1e-5, SolveType _type=Speed);
-
-// Ignore the runKDL and runNLOPT methods as they fail to be wrapped (and are private anyways)
-%ignore TRAC_IK::runKDL(const KDL::JntArray &q_init, const KDL::Frame &p_in);
-%ignore TRAC_IK::runNLOPT(const KDL::JntArray &q_init, const KDL::Frame &p_in);
-
-// Ignore other methods that we will wrap in a more usable way
-%ignore TRAC_IK::getKDLLimits(KDL::JntArray& lb_, KDL::JntArray& ub_);
-%ignore TRAC_IK::setKDLLimits(KDL::JntArray& lb_, KDL::JntArray& ub_);
-
-// All variables will use const reference typemaps
-// This eases dealing with std::vectors
-%naturalvar;
-
-// Parse the original header file to generate wrappers
-%include <trac_ik/trac_ik.hpp>
+%include <exception.i>
+%exception {
+  try { $action }
+  catch (const std::invalid_argument& error) { SWIG_exception(SWIG_ValueError, error.what()); }
+  catch (const std::exception& error) { SWIG_exception(SWIG_RuntimeError, error.what()); }
+}
+namespace TRAC_IK {
+class TRAC_IK {
+public:
+  ~TRAC_IK();
+};
+}
 
 // Create a more Python friendly constructor
 %extend TRAC_IK::TRAC_IK {
-    // Based on trac_ik_kinematics_plugin.cpp implementation
-    // As we can't access the private variables of the TRAC_IK class from this extension
-    // this is the only way I found to make another constructor
-    // thanks to: http://stackoverflow.com/questions/33564645/how-to-add-an-alternative-constructor-to-the-target-language-specifically-pytho
+    // Delegate URDF parsing and initialization to the standalone C++ constructor.
     TRAC_IK(const std::string& base_link, const std::string& tip_link, const std::string& urdf_string,
       double timeout, double epsilon, const std::string& solve_type="Speed"){
-
-      urdf::Model robot_model;
-
-      robot_model.initString(urdf_string);
-
-      ROS_DEBUG_STREAM_NAMED("trac_ik","Reading joints and links from URDF");
-
-      KDL::Tree tree;
-
-      if (!kdl_parser::treeFromUrdfModel(robot_model, tree)) {
-        ROS_FATAL("Failed to extract kdl tree from xml robot description");
-      }
-
-
-      KDL::Chain chain;
-
-      if(!tree.getChain(base_link, tip_link, chain)) {
-        ROS_FATAL("Couldn't find chain %s to %s",base_link.c_str(),tip_link.c_str());
-      }
-
-      uint num_joints_;
-      num_joints_ = chain.getNrOfJoints();
-      
-      std::vector<KDL::Segment> chain_segs = chain.segments;
-
-      urdf::JointConstSharedPtr joint;
-
-      std::vector<double> l_bounds, u_bounds;
-
-      KDL::JntArray joint_min, joint_max;
-
-      joint_min.resize(num_joints_);
-      joint_max.resize(num_joints_);
-
-      std::vector<std::string> link_names_;
-      std::vector<std::string> joint_names_;
-
-      uint joint_num=0;
-      for(unsigned int i = 0; i < chain_segs.size(); ++i) {
-
-        link_names_.push_back(chain_segs[i].getName());
-        joint = robot_model.getJoint(chain_segs[i].getJoint().getName());
-        if (joint->type != urdf::Joint::UNKNOWN && joint->type != urdf::Joint::FIXED) {
-          joint_num++;
-          assert(joint_num<=num_joints_);
-          float lower, upper;
-          int hasLimits;
-          joint_names_.push_back(joint->name);
-          if ( joint->type != urdf::Joint::CONTINUOUS ) {
-            if(joint->safety) {
-              lower = std::max(joint->limits->lower, joint->safety->soft_lower_limit);
-              upper = std::min(joint->limits->upper, joint->safety->soft_upper_limit);
-            } else {
-              lower = joint->limits->lower;
-              upper = joint->limits->upper;
-            }
-            hasLimits = 1;
-          }
-          else {
-            hasLimits = 0;
-          }
-          if(hasLimits) {
-            joint_min(joint_num-1)=lower;
-            joint_max(joint_num-1)=upper;
-          }
-          else {
-            joint_min(joint_num-1)=std::numeric_limits<float>::lowest();
-            joint_max(joint_num-1)=std::numeric_limits<float>::max();
-          }
-          ROS_DEBUG_STREAM("IK Using joint "<<chain_segs[i].getName()<<" "<<joint_min(joint_num-1)<<" "<<joint_max(joint_num-1));
-        }
-      }
-
 
       TRAC_IK::SolveType solvetype;
 
@@ -138,15 +51,17 @@ namespace std {
         solvetype = TRAC_IK::Manip1;
       else if (solve_type == "Manipulation2")
         solvetype = TRAC_IK::Manip2;
+      else if (solve_type == "Manipulation3")
+        solvetype = TRAC_IK::Manip3;
       else if (solve_type == "Distance")
         solvetype = TRAC_IK::Distance;
       else {
           if (solve_type != "Speed") {
-              ROS_WARN_STREAM_NAMED("trac_ik", solve_type << " is not a valid solve_type; setting to default: Speed");
+              throw std::invalid_argument("Unknown solve_type: " + solve_type);
           }
           solvetype = TRAC_IK::Speed;
       }
-          TRAC_IK::TRAC_IK* newX = new TRAC_IK::TRAC_IK(chain, joint_min, joint_max, timeout, epsilon, solvetype);
+          TRAC_IK::TRAC_IK* newX = new TRAC_IK::TRAC_IK(base_link, tip_link, urdf_string, timeout, epsilon, solvetype);
           return newX;
     }
 
@@ -166,17 +81,12 @@ namespace std {
      const double boundrx=0.0, const double boundry=0.0, const double boundrz=0.0)
     {
 
-      KDL::Frame frame;
-      geometry_msgs::Pose pose;
-      pose.position.x = x;
-      pose.position.y = y;
-      pose.position.z = z;
-      pose.orientation.x = rx;
-      pose.orientation.y = ry;
-      pose.orientation.z = rz;
-      pose.orientation.w = rw;
-
-      tf::poseMsgToKDL(pose, frame);
+      const double norm = std::sqrt(rx*rx + ry*ry + rz*rz + rw*rw);
+      if (!std::isfinite(norm) || norm < 1e-12) throw std::invalid_argument("Invalid quaternion");
+      KDL::Frame frame(KDL::Rotation::Quaternion(rx/norm, ry/norm, rz/norm, rw/norm), KDL::Vector(x,y,z));
+      KDL::Chain chain;
+      $self->getKDLChain(chain);
+      if (q_init.size() != chain.getNrOfJoints()) throw std::invalid_argument("Wrong seed size");
 
       KDL::JntArray in(q_init.size()), out(q_init.size());
 
@@ -194,7 +104,7 @@ namespace std {
       int rc = $self->CartToJnt(in, frame, out, bounds);
       std::vector<double> vout;
       // If no solution, return empty vector which acts as None
-      if (rc == -3)
+      if (rc < 0)
           return vout;
 
       for (uint z=0; z < q_init.size(); z++)
@@ -219,18 +129,9 @@ namespace std {
 
       std::vector<std::string> joint_names_;
       std::vector<std::string> link_names_;
-      urdf::JointConstSharedPtr joint;
-
-      urdf::Model robot_model;
-      robot_model.initString(urdf_string);
-
-      for(unsigned int i = 0; i < chain_segs.size(); ++i) {
-        link_names_.push_back(chain_segs[i].getName());
-        joint = robot_model.getJoint(chain_segs[i].getJoint().getName());
-        if (joint->type != urdf::Joint::UNKNOWN && joint->type != urdf::Joint::FIXED) {
-          joint_names_.push_back(joint->name);
-        }
-      }
+      for (const auto& segment : chain_segs)
+        if (segment.getJoint().getType() != KDL::Joint::Fixed)
+          joint_names_.push_back(segment.getJoint().getName());
       return joint_names_;
     }
 

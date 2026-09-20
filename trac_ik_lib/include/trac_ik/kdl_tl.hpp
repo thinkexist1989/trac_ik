@@ -34,7 +34,10 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <kdl/chainfksolverpos_recursive.hpp>
 #include <kdl/chainiksolvervel_pinv.hpp>
-#include <rclcpp/clock.hpp>
+#include <chrono>
+#include <atomic>
+#include <cstdio>
+#include <iostream>
 
 namespace TRAC_IK
 {
@@ -91,7 +94,7 @@ private:
     aborted = false;
   }
 
-  bool aborted;
+  std::atomic<bool> aborted{false};
 
   Frame f;
   Twist delta_twist;
@@ -102,7 +105,6 @@ private:
     return min + f * (max - min);
   }
   
-  rclcpp::Clock system_clock;
 
 };
 

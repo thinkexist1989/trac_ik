@@ -191,11 +191,8 @@ void constrainfuncm(uint m, double* result, uint n, const double* x, double* gra
   }
 }
 
-NLOPT_IK::NLOPT_IK(rclcpp::Node::SharedPtr _nh, const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime, double _eps, OptType _type):
-  NLOPT_IK(chain, _q_min, _q_max, _maxtime, _eps, _type, _nh->get_logger()){}
-
-NLOPT_IK::NLOPT_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime, double _eps, OptType _type, const rclcpp::Logger& _logger):
-  logger_(_logger), chain(_chain), fksolver(chain), maxtime(_maxtime), eps(std::abs(_eps)), TYPE(_type)
+NLOPT_IK::NLOPT_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime, double _eps, OptType _type):
+  chain(_chain), fksolver(chain), maxtime(_maxtime), eps(std::abs(_eps)), TYPE(_type)
 {
   assert(chain.getNrOfJoints() == _q_min.data.size());
   assert(chain.getNrOfJoints() == _q_max.data.size());
@@ -207,7 +204,7 @@ NLOPT_IK::NLOPT_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const 
 
   if (chain.getNrOfJoints() < 2)
   {
-    RCLCPP_WARN_THROTTLE(logger_, system_clock, 1000.0, "NLOpt_IK can only be run for chains of length 2 or more");
+    std::fprintf(stderr, "NLOpt_IK can only be run for chains of length 2 or more");
     return;
   }
   opt = nlopt::opt(nlopt::LD_SLSQP, _chain.getNrOfJoints());
@@ -301,11 +298,11 @@ void NLOPT_IK::cartSumSquaredError(const std::vector<double>& x, double error[])
   int rc = fksolver.JntToCart(q, currentPose);
 
   if (rc < 0)
-    RCLCPP_FATAL_STREAM(logger_, "KDL FKSolver is failing: " << q.data);
+    std::cerr << "KDL FKSolver is failing: " << q.data << std::endl;
 
   if (std::isnan(currentPose.p.x()))
   {
-    RCLCPP_ERROR(logger_, "NaNs from NLOpt!!");
+    std::fprintf(stderr, "NaNs from NLOpt!!");
     error[0] = std::numeric_limits<float>::max();
     progress = -1;
     return;
@@ -352,12 +349,12 @@ void NLOPT_IK::cartL2NormError(const std::vector<double>& x, double error[])
   int rc = fksolver.JntToCart(q, currentPose);
 
   if (rc < 0)
-    RCLCPP_FATAL_STREAM(logger_, "KDL FKSolver is failing: " << q.data);
+    std::cerr << "KDL FKSolver is failing: " << q.data << std::endl;
 
 
   if (std::isnan(currentPose.p.x()))
   {
-    RCLCPP_ERROR(logger_, "NaNs from NLOpt!!");
+    std::fprintf(stderr, "NaNs from NLOpt!!");
     error[0] = std::numeric_limits<float>::max();
     progress = -1;
     return;
@@ -405,12 +402,12 @@ void NLOPT_IK::cartDQError(const std::vector<double>& x, double error[])
   int rc = fksolver.JntToCart(q, currentPose);
 
   if (rc < 0)
-    RCLCPP_FATAL_STREAM(logger_, "KDL FKSolver is failing: " << q.data);
+    std::cerr << "KDL FKSolver is failing: " << q.data << std::endl;
 
 
   if (std::isnan(currentPose.p.x()))
   {
-    RCLCPP_ERROR(logger_, "NaNs from NLOpt!!");
+    std::fprintf(stderr, "NaNs from NLOpt!!");
     error[0] = std::numeric_limits<float>::max();
     progress = -1;
     return;
@@ -454,20 +451,20 @@ int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL
   // Returns -3 if a configuration could not be found within the eps
   // set up in the constructor.
 
-  auto start_time = system_clock.now();
+  auto start_time = std::chrono::steady_clock::now();
 
   bounds = _bounds;
   q_out = q_init;
   
   if (chain.getNrOfJoints() < 2)
   {
-    RCLCPP_ERROR_THROTTLE(logger_, system_clock, 1000.0, "NLOpt_IK can only be run for chains of length 2 or more");
+    std::fprintf(stderr, "NLOpt_IK can only be run for chains of length 2 or more");
     return -3;
   }
 
   if (q_init.data.size() != types.size())
   {
-    RCLCPP_ERROR_THROTTLE(logger_, system_clock, 1000.0, "IK seeded with wrong number of joints.  Expected %d but got %d", (int)types.size(), (int)q_init.data.size());
+    std::fprintf(stderr, "IK seeded with wrong number of joints.  Expected %d but got %d", (int)types.size(), (int)q_init.data.size());
     return -3;
   }
 
@@ -587,8 +584,8 @@ int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL
 
   if (!aborted && progress < 0)
   {
-    auto diff = system_clock.now() - start_time;
-    auto time_left = maxtime - diff.seconds();
+    auto diff = std::chrono::steady_clock::now() - start_time;
+    auto time_left = maxtime - std::chrono::duration<double>(diff).count();
 
     while (time_left > 0 && !aborted && progress < 0)
     {
@@ -607,8 +604,8 @@ int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL
       if (progress == -1) // Got NaNs
         progress = -3;
 
-      auto diff = system_clock.now() - start_time;
-      time_left = maxtime - diff.seconds();
+      auto diff = std::chrono::steady_clock::now() - start_time;
+      time_left = maxtime - std::chrono::duration<double>(diff).count();
     }
   }
 
