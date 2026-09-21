@@ -42,6 +42,17 @@ int main(int argc, char** argv) {
     pinocchio::Data data(model);
     pinocchio::FrameIndex tip_frame_id = model.getFrameId("tip", pinocchio::BODY);
 
+    // Debug: print joint information
+    std::cout << "Model joints:" << std::endl;
+    for (size_t i = 0; i < model.njoints; ++i) {
+        std::cout << "  Joint " << i << ": " << model.names[i]
+                  << " (nq=" << model.joints[i].nq()
+                  << ", nv=" << model.joints[i].nv()
+                  << ", idx_q=" << model.joints[i].idx_q()
+                  << ", idx_v=" << model.joints[i].idx_v() << ")" << std::endl;
+    }
+    std::cout << "Total: nq=" << model.nq << ", nv=" << model.nv << std::endl;
+
     // Configuration: 3 prismatic + 2 revolute + 2 continuous (cos, sin)
     Eigen::VectorXd q(7), seed(7), out;
     // Set: x=0.3, y=-0.2, z=0.4, roll=0.2, pitch=-0.3, yaw=0.7 (as angle)

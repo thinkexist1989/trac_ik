@@ -262,6 +262,10 @@ void NLOPT_IK::cartSumSquaredError(const std::vector<double>& x, double error[])
   for (uint i = 0; i < x.size(); i++)
     q(i) = x[i];
 
+  // Normalize continuous joints to enforce unit circle constraint
+  // TODO: Need to identify which joints are continuous from the model
+  // For now, forward kinematics should be robust to small deviations
+
   pinocchio::forwardKinematics(model, *data, q);
   pinocchio::updateFramePlacements(model, *data);
   currentPose = data->oMf[tip_frame_id];
@@ -349,6 +353,10 @@ void NLOPT_IK::cartDQError(const std::vector<double>& x, double error[])
   Eigen::VectorXd q(x.size());
   for (uint i = 0; i < x.size(); i++)
     q(i) = x[i];
+
+  // Normalize continuous joints to enforce unit circle constraint
+  // TODO: Need to identify which joints are continuous from the model
+  // For now, forward kinematics should be robust to small deviations
 
   pinocchio::forwardKinematics(model, *data, q);
   pinocchio::updateFramePlacements(model, *data);

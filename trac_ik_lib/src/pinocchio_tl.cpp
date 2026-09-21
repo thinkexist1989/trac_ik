@@ -133,7 +133,9 @@ int ChainIkSolverPos_TL::CartToJnt(const Eigen::VectorXd &q_init, const pinocchi
 
     delta_q = J.completeOrthogonalDecomposition().solve(twist_vec);
 
-    Eigen::VectorXd q_curr = q_out + delta_q;
+    // Use pinocchio::integrate for proper manifold update
+    Eigen::VectorXd q_curr(model.nq);
+    pinocchio::integrate(model, q_out, delta_q, q_curr);
 
     // Apply joint limits
     for (int j = 0; j < q_min.size(); j++)
