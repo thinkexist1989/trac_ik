@@ -142,17 +142,134 @@ for (size_t i = 0; i < joint_ids.size(); ++i) {
 ./build/tests/standalone_tests tests/robot.urdf
 ```
 
-## 估计工作量
+## 估计工作量（已更新）
 
-- **方案 1（完整支持）**: 4-6 小时
-  - 配置转换: 1 小时
-  - 雅可比处理: 1 小时
-  - IK 求解器更新: 2 小时
-  - 测试和调试: 2 小时
+### 🎯 关键发现：工作量比预期小得多！
 
-- **方案 3（子配置向量）**: 2-3 小时
-  - 实现相对简单
-  - 测试和调试: 1 小时
+由于雅可比矩阵维度**不变**，核心 IK 算法无需修改。只需要替换配置更新方式。
+
+### 方案 1：使用 pinocchio::integrate()（推荐，最简单）
+
+**总工作量: 30-60 分钟**
+
+修改内容：
+1. ✏️ `pinocchio_tl.cpp` (15分钟)
+   ```cpp
+   // 只需替换一行：
+   - q += delta_q;
+   + pinocchio::integrate(model, q, delta_q, q);
+   ```
+
+2. ✏️ `nlopt_ik.cpp` (15分钟)  
+   ```cpp
+   // 同样的修改
+   - q = q + step;
+   + pinocchio::integrate(model, q, step, q);
+   ```
+
+3. ✏️ 初始化和边界处理 (15分钟)
+   - 确保 `q_init` 使用 `pinocchio::neutral(model)`
+   - 或正确设置连续关节的 (cos, sin) 值
+
+4. 🧪 测试 (15分钟)
+   - 编译
+   - 运行基本测试
+   - 验证收敛性
+
+### 方案 2：完全在速度空间优化（如果方案1不够）
+
+**额外工作量: +1-2 小时**（只在方案1遇到问题时需要）
+
+仅在以下情况需要：
+- NLopt 优化器对配置空间约束处理不好
+- 需要更精确的关节限制处理
+
+修改内容：
+- 添加 `anglesToConfig()` 和 `configToAngles()` 转换函数
+- 在优化器中使用角度空间变量
+
+### 方案 3：降级到 Pinocchio 2.x（零代码修改）
+
+**工作量: 10-15 分钟**（仅安装时间）
+
+```bash
+# 卸载 Pinocchio 4.x
+sudo rm -rf /opt/openrobots/include/pinocchio /opt/openrobots/lib/libpinocchio*
+
+# 安装 Pinocchio 2.6.x
+git clone https://github.com/stack-of-tasks/pinocchio
+cd pinocchio && git checkout v2.6.20
+mkdir build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=/opt/openrobots
+make -j$(nproc) && sudo make install
+
+# 重新编译 TRAC-IK（无代码修改）
+cd /home/think/Documents/GitHub/trac_ik/build
+make clean && make -j$(nproc)
+```
+
+测试应该直接通过！
+
+## 推荐方案
+
+### 🥇 首选：方案 1（pinocchio::integrate）
+
+- ⏱️ **30-60 分钟**
+- 🎯 **最小侵入性**：只改几行代码
+- ✅ **保持 Pinocchio 4.x**：享受最新特性
+- 📚 **数学正确**：使用流形几何
+- 🔧 **易于维护**：符合 Pinocchio 最佳实践
+
+### 🥈 备选：方案 3（降级到 2.x）
+
+- ⏱️ **10-15 分钟**
+- 🚀 **零风险**：无代码修改
+- ⚠️ **但失去 4.x 的新特性**
+
+### 🥉 最后手段：方案 2（速度空间优化）
+
+- ⏱️ **+1-2 小时**
+- 🔧 **仅在方案1遇到问题时使用**
+
+## 为什么工作量大幅减少？
+
+### ❌ 之前的错误理解
+以为需要：
+- 修改雅可比计算 ❌
+- 重构优化器变量映射 ❌  
+- 处理不同维度的矩阵运算 ❌
+- 估计: 4-6 小时
+
+### ✅ 实际情况
+只需要：
+- 替换配置更新语句 ✅ (几行代码)
+- 确保初始化正确 ✅ (已有函数)
+- 实际: 30-60 分钟
+
+## 核心洞察
+
+```cpp
+// 整个 IK 算法流程
+while (!converged) {
+    // 1. 前向运动学 ✅ 无需修改
+    pinocchio::forwardKinematics(model, data, q);
+    
+    // 2. 计算雅可比 ✅ 无需修改（维度相同！）
+    pinocchio::computeFrameJacobian(model, data, q, frame_id, J);
+    
+    // 3. 计算误差 ✅ 无需修改
+    Motion error = log6(target.actInv(data.oMf[frame_id]));
+    
+    // 4. 求解增量 ✅ 无需修改（J仍是6×6）
+    Vector6d delta_v = J.solve(error.toVector());
+    
+    // 5. 更新配置 ⚠️ 唯一需要改的地方！
+    // q = q + delta_v;  // ❌ 旧代码
+    pinocchio::integrate(model, q, delta_v, q);  // ✅ 新代码
+}
+```
+
+**只有第5步需要修改！其余85%的代码完全不变！**
 
 ## 快速开始
 
