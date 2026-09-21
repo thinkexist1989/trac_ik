@@ -1,5 +1,5 @@
-#include <trac_ik/trac_ik.hpp>
-#include <trac_ik/urdf.hpp>
+#include <pin_ik/pin_ik.hpp>
+#include <pin_ik/urdf.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/parsers/urdf.hpp>
@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     std::ifstream file(argv[1]);
     std::string xml((std::istreambuf_iterator<char>(file)), {});
 
-    TRAC_IK::TRAC_IK parsed("base", "tip", xml, 0.03);
+    PIN_IK::PIN_IK parsed("base", "tip", xml, 0.03);
     pinocchio::Model model;
     Eigen::VectorXd lo, hi;
     require(parsed.getModel(model) && parsed.getLimits(lo, hi), "Initialization failed");
@@ -81,8 +81,8 @@ int main(int argc, char** argv) {
 
     require(goal.isApprox(expected, 1e-10), "URDF FK disagrees with analytic transform");
 
-    for (auto mode : {TRAC_IK::Speed, TRAC_IK::Distance, TRAC_IK::Manip1, TRAC_IK::Manip2, TRAC_IK::Manip3}) {
-      TRAC_IK::TRAC_IK solver(model, lo, hi, tip_frame_id, 0.03, 1e-6, mode);
+    for (auto mode : {PIN_IK::Speed, PIN_IK::Distance, PIN_IK::Manip1, PIN_IK::Manip2, PIN_IK::Manip3}) {
+      PIN_IK::PIN_IK solver(model, lo, hi, tip_frame_id, 0.03, 1e-6, mode);
       require(solver.CartToJnt(seed, goal, out) >= 0, "IK failed");
 
       pinocchio::forwardKinematics(model, data, out);
@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
     arm_hi.setConstant(2.5);
 
     pinocchio::FrameIndex arm_tip_id = arm_model.getFrameId("tip", pinocchio::BODY);
-    TRAC_IK::TRAC_IK arm_solver(arm_model, arm_lo, arm_hi, arm_tip_id, 0.05, 1e-6);
+    PIN_IK::PIN_IK arm_solver(arm_model, arm_lo, arm_hi, arm_tip_id, 0.05, 1e-6);
     pinocchio::Data arm_data(arm_model);
 
     std::mt19937 rng(42);
@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
     pinocchio::Model rotated_model;
     Eigen::VectorXd rotated_lo, rotated_hi;
     pinocchio::FrameIndex rotated_tip_id;
-    TRAC_IK::loadURDFModel(rotated, "base", "tip", rotated_model, rotated_lo, rotated_hi, rotated_tip_id);
+    PIN_IK::loadURDFModel(rotated, "base", "tip", rotated_model, rotated_lo, rotated_hi, rotated_tip_id);
 
     Eigen::VectorXd angle(1);
     angle(0) = 0.6;
@@ -191,10 +191,10 @@ int main(int argc, char** argv) {
     require(parsed.CartToJnt(seed, unreachable, out) < 0, "Unreachable target accepted");
     require(std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count() < 1, "Timeout broken");
 
-    rejects([&]{ TRAC_IK::TRAC_IK bad("base", "missing", xml); });
-    rejects([&]{ TRAC_IK::TRAC_IK bad("tip", "base", xml); });
-    rejects([&]{ TRAC_IK::TRAC_IK bad("base", "tip", "bad xml"); });
-    rejects([&]{ TRAC_IK::TRAC_IK bad(model, Eigen::VectorXd(1), hi, tip_frame_id); });
+    rejects([&]{ PIN_IK::PIN_IK bad("base", "missing", xml); });
+    rejects([&]{ PIN_IK::PIN_IK bad("tip", "base", xml); });
+    rejects([&]{ PIN_IK::PIN_IK bad("base", "tip", "bad xml"); });
+    rejects([&]{ PIN_IK::PIN_IK bad(model, Eigen::VectorXd(1), hi, tip_frame_id); });
 
     std::cout << "All five solve modes, 100 6R targets, analytic FK, limits, invalid inputs and timeout passed\n";
     return 0;

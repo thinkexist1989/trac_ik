@@ -1,7 +1,7 @@
 # 本地验证记录
 
 2026-09-20，Linux x86_64，GCC 11.4，CMake，Python 3.10.12，SWIG 4.0.2。
-NLopt 2.7.1 从 Ubuntu deb 解压到 `/tmp/trac-ik-deps/root/usr`，没有安装 ROS 或新增系统软件包。
+NLopt 2.7.1 从 Ubuntu deb 解压到 `/tmp/pin-ik-deps/root/usr`，没有安装 ROS 或新增系统软件包。
 环境已有 KDL、Eigen 和 urdfdom；测试使用独立系统库。此验证不是无 ROS 容器测试，
 但 `ldd` 确认核心库及 Python 扩展的完整动态依赖没有 ROS 库。
 
@@ -12,7 +12,7 @@ NLopt 2.7.1 从 Ubuntu deb 解压到 `/tmp/trac-ik-deps/root/usr`，没有安装
 - 示例：混合移动/旋转关节模型，100 个固定随机种子的目标，统一中点初值，100/100 成功；
   FK 容差 1e-4，检查全部关节限位。
 - Python：五种模式的已知位姿、关节名称、限位读写、不可达目标、无效模型/模式/四元数/初值。
-- 安装到 `/tmp/trac-ik-install` 后，独立 CMake 工程通过 `find_package(trac_ik)`
+- 安装到 `/tmp/pin-ik-install` 后，独立 CMake 工程通过 `find_package(pin_ik)`
   构建并完成 100/100 示例目标；安装后的 Python 包也通过测试。
 - `git diff --check` 通过。
 

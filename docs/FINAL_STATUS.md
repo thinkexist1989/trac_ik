@@ -1,4 +1,4 @@
-# TRAC-IK 迁移到 Pinocchio 4.x - 最终状态报告
+# PIN-IK 迁移到 Pinocchio 4.x - 最终状态报告
 
 ## ✅ 已完成的工作
 
@@ -6,7 +6,7 @@
 - ✅ 所有 KDL 依赖已完全移除
 - ✅ 新增 Pinocchio 类型定义和辅助函数
 - ✅ 更新所有源文件以使用 Pinocchio 4.x API
-- ✅ 核心库 `libtrac_ik.so` **成功编译**
+- ✅ 核心库 `libpin_ik.so` **成功编译**
 
 ### 2. Pinocchio 4.x API 适配（100%）
 - ✅ 正确使用 `ModelTpl<double, 0, JointCollectionDefaultTpl>`
@@ -46,7 +46,7 @@
 
 1. **pinocchio_tl.cpp** - 更新 IK 求解器以处理 2-DOF 连续关节
 2. **nlopt_ik.cpp** - 调整优化变量映射
-3. **trac_ik.cpp** - 更新配置向量处理
+3. **pin_ik.cpp** - 更新配置向量处理
 4. **urdf.cpp** - 实现正确的链提取，或使用子配置向量
 
 ### 选项 B：降级到 Pinocchio 2.x/3.x（快速验证）
@@ -65,31 +65,31 @@ make -j$(nproc)
 sudo make install
 ```
 
-然后重新编译 TRAC-IK，代码应该可以直接工作。
+然后重新编译 PIN-IK，代码应该可以直接工作。
 
 ## 📁 已交付的文件
 
 ### 新增文件
-- `trac_ik_lib/include/trac_ik/pinocchio_types.hpp` - Pinocchio 类型定义
-- `trac_ik_lib/include/trac_ik/pinocchio_tl.hpp` - Pinocchio IK 求解器头文件
-- `trac_ik_lib/src/pinocchio_tl.cpp` - Pinocchio IK 求解器实现
+- `pin_ik_lib/include/pin_ik/pinocchio_types.hpp` - Pinocchio 类型定义
+- `pin_ik_lib/include/pin_ik/pinocchio_tl.hpp` - Pinocchio IK 求解器头文件
+- `pin_ik_lib/src/pinocchio_tl.cpp` - Pinocchio IK 求解器实现
 - `MIGRATION_STATUS.md` - 迁移状态文档
 - `MIGRATION_REPORT.md` - 详细技术文档
 - `README_PINOCCHIO.md` - Pinocchio 使用指南
 
 ### 修改文件
-- `trac_ik_lib/include/trac_ik/nlopt_ik.hpp`
-- `trac_ik_lib/src/nlopt_ik.cpp`
-- `trac_ik_lib/include/trac_ik/trac_ik.hpp`
-- `trac_ik_lib/src/trac_ik.cpp`
-- `trac_ik_lib/include/trac_ik/urdf.hpp`
-- `trac_ik_lib/src/urdf.cpp`
-- `trac_ik_lib/CMakeLists.txt`
-- `cmake/trac_ikConfig.cmake.in`
+- `pin_ik_lib/include/pin_ik/nlopt_ik.hpp`
+- `pin_ik_lib/src/nlopt_ik.cpp`
+- `pin_ik_lib/include/pin_ik/pin_ik.hpp`
+- `pin_ik_lib/src/pin_ik.cpp`
+- `pin_ik_lib/include/pin_ik/urdf.hpp`
+- `pin_ik_lib/src/urdf.cpp`
+- `pin_ik_lib/CMakeLists.txt`
+- `cmake/pin_ikConfig.cmake.in`
 
 ### 删除文件
-- `trac_ik_lib/include/trac_ik/kdl_tl.hpp`
-- `trac_ik_lib/src/kdl_tl.cpp`
+- `pin_ik_lib/include/pin_ik/kdl_tl.hpp`
+- `pin_ik_lib/src/kdl_tl.cpp`
 
 ## 🎯 技术细节
 
@@ -111,12 +111,12 @@ sudo make install
 ## 💡 建议
 
 ### 短期（立即可用）
-使用当前编译好的 `libtrac_ik.so` 库，它可以在其他 C++ 项目中正常使用。只需要：
+使用当前编译好的 `libpin_ik.so` 库，它可以在其他 C++ 项目中正常使用。只需要：
 ```cpp
-#include <trac_ik/trac_ik.hpp>
+#include <pin_ik/pin_ik.hpp>
 
 // 从 URDF 创建求解器
-TRAC_IK::TRAC_IK solver("base_link", "tip_link", urdf_string, timeout);
+PIN_IK::PIN_IK solver("base_link", "tip_link", urdf_string, timeout);
 
 // 求解 IK
 Eigen::VectorXd seed, solution;

@@ -1,6 +1,6 @@
-# TRAC-IK 文档
+# PIN-IK 文档
 
-本目录包含 TRAC-IK 从 KDL 到 Pinocchio 4.x 迁移的详细技术文档。
+本目录包含 PIN-IK 从 KDL 到 Pinocchio 4.x 迁移的详细技术文档。
 
 ## 文档列表
 
@@ -84,7 +84,7 @@ pinocchio::integrate(model, q, delta_q, q);
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| 核心库编译 | ✅ 完成 | libtrac_ik.so 成功构建 |
+| 核心库编译 | ✅ 完成 | libpin_ik.so 成功构建 |
 | API 迁移 | ✅ 完成 | 所有 KDL 代码已移除 |
 | pinocchio::integrate() | ✅ 完成 | 配置更新正确实现 |
 | 测试套件 | ⚠️ 需调整 | FK 期望值基于简化链，实际用完整模型 |
@@ -106,7 +106,7 @@ pinocchio::integrate(model, q, delta_q, q);
 - [Pinocchio 文档](https://stack-of-tasks.github.io/pinocchio/)
 - [Pinocchio GitHub](https://github.com/stack-of-tasks/pinocchio)
 - [NLopt 文档](https://nlopt.readthedocs.io/)
-- [原始 TRAC-IK 论文](https://ieeexplore.ieee.org/document/7363472)
+- [原始 PIN-IK 论文](https://ieeexplore.ieee.org/document/7363472)
 
 ### 仓库文件
 - [主 README](../README.md) - 使用说明和 API

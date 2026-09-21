@@ -1,6 +1,6 @@
-# TRAC-IK with Pinocchio
+# PIN-IK with Pinocchio
 
-TRAC-IK (Track Inverse Kinematics) 现在使用 Pinocchio 作为其运动学后端，替代了原来的 KDL (Kinematics and Dynamics Library)。
+PIN-IK (Track Inverse Kinematics) 现在使用 Pinocchio 作为其运动学后端，替代了原来的 KDL (Kinematics and Dynamics Library)。
 
 ## 依赖项
 
@@ -48,7 +48,7 @@ sudo apt-get install ros-humble-pinocchio
 ## 编译
 
 ```bash
-cd /path/to/trac_ik
+cd /path/to/pin_ik
 mkdir build && cd build
 
 # 如果 Pinocchio 安装在 /opt/openrobots
@@ -67,12 +67,12 @@ sudo make install
 
 ### 编译选项
 
-- `TRAC_IK_BUILD_PYTHON=ON/OFF` - 构建 Python 绑定 (默认: ON)
-- `TRAC_IK_BUILD_EXAMPLES=ON/OFF` - 构建示例 (默认: ON)
+- `PIN_IK_BUILD_PYTHON=ON/OFF` - 构建 Python 绑定 (默认: ON)
+- `PIN_IK_BUILD_EXAMPLES=ON/OFF` - 构建示例 (默认: ON)
 - `BUILD_TESTING=ON/OFF` - 构建测试 (默认: ON)
 
 ```bash
-cmake .. -DTRAC_IK_BUILD_PYTHON=OFF -DTRAC_IK_BUILD_EXAMPLES=OFF
+cmake .. -DPIN_IK_BUILD_PYTHON=OFF -DPIN_IK_BUILD_EXAMPLES=OFF
 ```
 
 ## 使用
@@ -80,15 +80,15 @@ cmake .. -DTRAC_IK_BUILD_PYTHON=OFF -DTRAC_IK_BUILD_EXAMPLES=OFF
 ### C++ API
 
 ```cpp
-#include <trac_ik/trac_ik.hpp>
+#include <pin_ik/pin_ik.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 
 // 方法 1: 从 URDF 字符串初始化
 std::string urdf_xml = "...";  // 你的 URDF XML 字符串
-TRAC_IK::TRAC_IK ik_solver("base_link", "tip_link", urdf_xml, 
+PIN_IK::PIN_IK ik_solver("base_link", "tip_link", urdf_xml, 
                             0.005,  // 超时时间（秒）
                             1e-5,   // 精度
-                            TRAC_IK::Speed);  // 求解类型
+                            PIN_IK::Speed);  // 求解类型
 
 // 方法 2: 从 Pinocchio Model 初始化
 pinocchio::Model model;
@@ -96,7 +96,7 @@ pinocchio::urdf::buildModelFromXML(urdf_xml, model);
 Eigen::VectorXd q_min(model.nq), q_max(model.nq);
 // 设置关节限制...
 pinocchio::FrameIndex tip_frame_id = model.getFrameId("tip_link");
-TRAC_IK::TRAC_IK ik_solver(model, q_min, q_max, tip_frame_id, 0.005, 1e-5);
+PIN_IK::PIN_IK ik_solver(model, q_min, q_max, tip_frame_id, 0.005, 1e-5);
 
 // 设置目标位姿
 pinocchio::SE3 target_pose;
@@ -121,7 +121,7 @@ if (result >= 0) {
 ### Python API
 
 ```python
-from trac_ik_python.trac_ik import IK
+from pin_ik_python.pin_ik import IK
 
 # 读取 URDF
 with open('robot.urdf', 'r') as f:
@@ -186,7 +186,7 @@ cd build
 ./tests/standalone_tests /path/to/test.urdf
 
 # 运行 IK 测试
-./trac_ik_examples/ik_tests /path/to/robot.urdf base_link tip_link 100
+./pin_ik_examples/ik_tests /path/to/robot.urdf base_link tip_link 100
 ```
 
 ## 与 KDL 版本的区别
@@ -238,11 +238,11 @@ cmake .. -DCMAKE_CXX_STANDARD=17
 
 ## 文献引用
 
-如果在研究中使用 TRAC-IK，请引用：
+如果在研究中使用 PIN-IK，请引用：
 
 ```
 @article{beeson2015trac,
-  title={TRAC-IK: An open-source library for improved solving of generic inverse kinematics},
+  title={PIN-IK: An open-source library for improved solving of generic inverse kinematics},
   author={Beeson, Patrick and Ames, Barrett},
   journal={IEEE-RAS International Conference on Humanoid Robots},
   year={2015}
@@ -251,7 +251,7 @@ cmake .. -DCMAKE_CXX_STANDARD=17
 
 ## 许可证
 
-TRAC-IK 使用 BSD 3-Clause 许可证。详见 LICENSE 文件。
+PIN-IK 使用 BSD 3-Clause 许可证。详见 LICENSE 文件。
 
 ## 贡献
 
@@ -260,5 +260,5 @@ TRAC-IK 使用 BSD 3-Clause 许可证。详见 LICENSE 文件。
 ## 相关链接
 
 - [Pinocchio 文档](https://stack-of-tasks.github.io/pinocchio/)
-- [原始 TRAC-IK](https://bitbucket.org/traclabs/trac_ik/)
+- [原始 PIN-IK](https://bitbucket.org/traclabs/pin_ik/)
 - [Eigen 文档](https://eigen.tuxfamily.org/)

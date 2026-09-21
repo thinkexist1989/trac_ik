@@ -2,7 +2,7 @@ import math
 import pathlib
 import sys
 import unittest
-from trac_ik_python.trac_ik import IK
+from pin_ik_python.pin_ik import IK
 
 XML = pathlib.Path(sys.argv.pop()).read_text()
 class StandaloneTest(unittest.TestCase):

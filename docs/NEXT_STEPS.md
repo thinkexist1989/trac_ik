@@ -3,7 +3,7 @@
 ## 当前状态
 
 ✅ **代码已提交到 git**: commit `e6962ea`  
-✅ **核心库编译成功**: `libtrac_ik.so` 可用  
+✅ **核心库编译成功**: `libpin_ik.so` 可用  
 ⚠️ **测试需要调整**: 处理 Pinocchio 4.x 的连续关节表示
 
 ## 问题说明
@@ -104,15 +104,15 @@ for (size_t i = 0; i < joint_ids.size(); ++i) {
 
 ## 需要修改的文件
 
-1. **trac_ik_lib/src/urdf.cpp**
+1. **pin_ik_lib/src/urdf.cpp**
    - 添加连续关节检测
    - 返回关节类型信息
 
-2. **trac_ik_lib/src/pinocchio_tl.cpp**
+2. **pin_ik_lib/src/pinocchio_tl.cpp**
    - 添加配置空间转换
    - 处理连续关节的雅可比
 
-3. **trac_ik_lib/src/nlopt_ik.cpp**
+3. **pin_ik_lib/src/nlopt_ik.cpp**
    - 更新优化变量映射
    - 处理连续关节的限制
 
@@ -203,8 +203,8 @@ mkdir build && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=/opt/openrobots
 make -j$(nproc) && sudo make install
 
-# 重新编译 TRAC-IK（无代码修改）
-cd /home/think/Documents/GitHub/trac_ik/build
+# 重新编译 PIN-IK（无代码修改）
+cd /home/think/Documents/GitHub/pin_ik/build
 make clean && make -j$(nproc)
 ```
 
@@ -278,7 +278,7 @@ while (!converged) {
 这是最快的路径，保持现有架构：
 
 ```bash
-# 1. 编辑 trac_ik_lib/src/urdf.cpp
+# 1. 编辑 pin_ik_lib/src/urdf.cpp
 # 2. 修改 loadURDFModel 使用子配置向量
 # 3. 在 pinocchio_tl.cpp 中映射配置
 # 4. 重新编译测试
@@ -302,7 +302,7 @@ cd build && make -j$(nproc)
 
 **开始命令**:
 ```bash
-cd /home/think/Documents/GitHub/trac_ik
+cd /home/think/Documents/GitHub/pin_ik
 git checkout pinocchio
 # 选择一个方案开始实现
 ```

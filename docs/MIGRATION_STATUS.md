@@ -1,4 +1,4 @@
-# TRAC-IK 迁移状态报告
+# PIN-IK 迁移状态报告
 
 ## 迁移进度
 
@@ -6,14 +6,14 @@
 
 1. **核心代码迁移** - 所有源文件已从 KDL 迁移到 Pinocchio
    - 新增文件：pinocchio_types.hpp, pinocchio_tl.hpp/cpp
-   - 更新文件：nlopt_ik.hpp/cpp, trac_ik.hpp/cpp, urdf.hpp/cpp
+   - 更新文件：nlopt_ik.hpp/cpp, pin_ik.hpp/cpp, urdf.hpp/cpp
    - 删除文件：kdl_tl.hpp/cpp
 
 2. **数据类型转换** - 完成所有 KDL 到 Pinocchio 的类型映射
 
 3. **CMake 配置** - 更新构建系统以使用 Pinocchio
 
-4. **编译成功** - 核心库 libtrac_ik.so 已成功编译
+4. **编译成功** - 核心库 libpin_ik.so 已成功编译
 
 ## 当前问题
 
@@ -62,7 +62,7 @@ sudo make install
 1. **pinocchio_types.hpp** - 更新包含路径和类型定义
 2. **pinocchio_tl.cpp** - 更新函数调用
 3. **nlopt_ik.cpp** - 更新运动学计算
-4. **trac_ik.cpp** - 更新雅可比计算
+4. **pin_ik.cpp** - 更新雅可比计算
 5. **urdf.cpp** - 更新 URDF 解析
 
 ## 已验证的功能
@@ -81,16 +81,16 @@ sudo make install
 
 ```bash
 # 编译核心库（已成功）
-cd /home/think/Documents/GitHub/trac_ik
+cd /home/think/Documents/GitHub/pin_ik
 rm -rf build && mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release \
          -DCMAKE_PREFIX_PATH=/opt/openrobots \
-         -DTRAC_IK_BUILD_PYTHON=OFF \
-         -DTRAC_IK_BUILD_EXAMPLES=OFF \
+         -DPIN_IK_BUILD_PYTHON=OFF \
+         -DPIN_IK_BUILD_EXAMPLES=OFF \
          -DBUILD_TESTING=OFF
 make -j$(nproc)
 
-# 输出：build/trac_ik_lib/libtrac_ik.so
+# 输出：build/pin_ik_lib/libpin_ik.so
 ```
 
 ## 下一步建议
@@ -104,7 +104,7 @@ make -j$(nproc)
 ### 成功编译的组件
 - ✅ pinocchio_tl.cpp
 - ✅ nlopt_ik.cpp  
-- ✅ trac_ik.cpp
+- ✅ pin_ik.cpp
 - ✅ urdf.cpp
 
 ### 修复的编译错误
@@ -124,28 +124,28 @@ make -j$(nproc)
 ## 文件清单
 
 ### 新增文件
-- trac_ik_lib/include/trac_ik/pinocchio_types.hpp
-- trac_ik_lib/include/trac_ik/pinocchio_tl.hpp
-- trac_ik_lib/src/pinocchio_tl.cpp
+- pin_ik_lib/include/pin_ik/pinocchio_types.hpp
+- pin_ik_lib/include/pin_ik/pinocchio_tl.hpp
+- pin_ik_lib/src/pinocchio_tl.cpp
 - MIGRATION_REPORT.md
 - README_PINOCCHIO.md
 
 ### 修改文件
-- trac_ik_lib/include/trac_ik/nlopt_ik.hpp
-- trac_ik_lib/src/nlopt_ik.cpp
-- trac_ik_lib/include/trac_ik/trac_ik.hpp
-- trac_ik_lib/src/trac_ik.cpp
-- trac_ik_lib/include/trac_ik/urdf.hpp
-- trac_ik_lib/src/urdf.cpp
-- trac_ik_lib/CMakeLists.txt
-- cmake/trac_ikConfig.cmake.in
-- trac_ik_examples/src/ik_tests.cpp
+- pin_ik_lib/include/pin_ik/nlopt_ik.hpp
+- pin_ik_lib/src/nlopt_ik.cpp
+- pin_ik_lib/include/pin_ik/pin_ik.hpp
+- pin_ik_lib/src/pin_ik.cpp
+- pin_ik_lib/include/pin_ik/urdf.hpp
+- pin_ik_lib/src/urdf.cpp
+- pin_ik_lib/CMakeLists.txt
+- cmake/pin_ikConfig.cmake.in
+- pin_ik_examples/src/ik_tests.cpp
 - tests/standalone_tests.cpp
-- trac_ik_python/swig/trac_ik_wrap.i
+- pin_ik_python/swig/pin_ik_wrap.i
 
 ### 删除文件
-- trac_ik_lib/include/trac_ik/kdl_tl.hpp
-- trac_ik_lib/src/kdl_tl.cpp
+- pin_ik_lib/include/pin_ik/kdl_tl.hpp
+- pin_ik_lib/src/kdl_tl.cpp
 
 ## 结论
 

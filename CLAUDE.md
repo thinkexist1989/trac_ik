@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TRAC-IK is a standalone C++17 inverse kinematics solver using Pinocchio 4.x for kinematics and NLopt for optimization. It's been migrated from Orocos KDL to Pinocchio and made fully independent of ROS.
+PIN-IK is a standalone C++17 inverse kinematics solver using Pinocchio 4.x for kinematics and NLopt for optimization. It's been migrated from Orocos KDL to Pinocchio and made fully independent of ROS.
 
 **Key characteristic**: Dual-threaded solving with configurable optimization modes (Speed, Distance, Manip1/2/3).
 
@@ -22,7 +22,7 @@ ctest --test-dir build --output-on-failure
 ./build/tests/standalone_tests tests/robot.urdf
 
 # Run example
-./build/trac_ik_examples/ik_tests tests/robot.urdf base tip 100
+./build/pin_ik_examples/ik_tests tests/robot.urdf base tip 100
 
 # Clean rebuild
 rm -rf build && cmake -S . -B build && cmake --build build -j$(nproc)
@@ -32,7 +32,7 @@ rm -rf build && cmake -S . -B build && cmake --build build -j$(nproc)
 
 ### Three-Layer Solver Design
 
-1. **`TRAC_IK::TRAC_IK`** (trac_ik.hpp/cpp) - Main API
+1. **`PIN_IK::PIN_IK`** (pin_ik.hpp/cpp) - Main API
    - Dual-threaded: spawns `NLOPT_IK` and `ChainIkSolverPos_TL` in parallel
    - Returns first solution or best after timeout
    - Thread-safe per instance (don't share instances across threads)
@@ -104,7 +104,7 @@ Test suite (standalone_tests.cpp) currently expects simplified chain model but c
 
 To verify IK works:
 1. Create real robot URDF
-2. Test with `TRAC_IK` class directly
+2. Test with `PIN_IK` class directly
 3. Check solution with forward kinematics
 4. Verify joint limits respected
 
@@ -123,7 +123,7 @@ To verify IK works:
 
 ## Key Files
 
-- **trac_ik.cpp**: Main solver orchestration
+- **pin_ik.cpp**: Main solver orchestration
 - **pinocchio_tl.cpp**: Jacobian IK solver ← Uses `pinocchio::integrate()`
 - **nlopt_ik.cpp**: NLopt optimization ← NLopt manages updates internally
 - **urdf.cpp**: Model loading ← Returns full model, extracts chain limits
@@ -151,5 +151,5 @@ See `docs/` folder:
 Built with SWIG, installed to `build/lib`. Set `PYTHONPATH` to use:
 ```bash
 export PYTHONPATH=/path/to/build/lib:$PYTHONPATH
-python3 -c "from trac_ik_python.trac_ik import IK; print('OK')"
+python3 -c "from pin_ik_python.pin_ik import IK; print('OK')"
 ```

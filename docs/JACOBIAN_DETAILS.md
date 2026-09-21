@@ -87,7 +87,7 @@ q_new(6) = std::sin(yaw_new);
 
 ## 对现有代码的影响
 
-### 1. pinocchio_tl.cpp (TRAC-IK 的核心迭代求解器)
+### 1. pinocchio_tl.cpp (PIN-IK 的核心迭代求解器)
 
 当前代码（需要修改）:
 ```cpp

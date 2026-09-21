@@ -1,9 +1,9 @@
-#include <trac_ik/trac_ik.hpp>
+#include <pin_ik/pin_ik.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <iostream>
 
 int main() {
-    std::cout << "Testing TRAC-IK with Pinocchio..." << std::endl;
+    std::cout << "Testing PIN-IK with Pinocchio..." << std::endl;
 
     // Create a simple 2-DOF robot URDF
     std::string urdf = R"(
@@ -39,9 +39,9 @@ int main() {
 )";
 
     try {
-        // Create TRAC-IK solver
-        TRAC_IK::TRAC_IK solver("base", "tip", urdf, 0.005, 1e-5, TRAC_IK::Speed);
-        std::cout << "✓ TRAC-IK solver created successfully" << std::endl;
+        // Create PIN-IK solver
+        PIN_IK::PIN_IK solver("base", "tip", urdf, 0.005, 1e-5, PIN_IK::Speed);
+        std::cout << "✓ PIN-IK solver created successfully" << std::endl;
 
         // Get model info
         pinocchio::Model model;
@@ -69,7 +69,7 @@ int main() {
             std::cout << "✗ IK failed (this is OK for this simple test)" << std::endl;
         }
 
-        std::cout << "\n=== TRAC-IK Pinocchio integration test PASSED ===" << std::endl;
+        std::cout << "\n=== PIN-IK Pinocchio integration test PASSED ===" << std::endl;
         return 0;
 
     } catch (const std::exception& e) {

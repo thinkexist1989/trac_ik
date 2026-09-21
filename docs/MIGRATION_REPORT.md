@@ -1,4 +1,4 @@
-# TRAC-IK 从 KDL 迁移到 Pinocchio - 完成报告
+# PIN-IK 从 KDL 迁移到 Pinocchio - 完成报告
 
 ## 已完成的工作
 
@@ -7,22 +7,22 @@
 已将所有 KDL 数据结构和函数替换为 Pinocchio 等价物：
 
 #### 新增文件：
-- `trac_ik_lib/include/trac_ik/pinocchio_types.hpp` - Pinocchio 类型定义和辅助函数
-- `trac_ik_lib/include/trac_ik/pinocchio_tl.hpp` - Pinocchio 版本的 IK 求解器头文件
-- `trac_ik_lib/src/pinocchio_tl.cpp` - Pinocchio 版本的 IK 求解器实现
+- `pin_ik_lib/include/pin_ik/pinocchio_types.hpp` - Pinocchio 类型定义和辅助函数
+- `pin_ik_lib/include/pin_ik/pinocchio_tl.hpp` - Pinocchio 版本的 IK 求解器头文件
+- `pin_ik_lib/src/pinocchio_tl.cpp` - Pinocchio 版本的 IK 求解器实现
 
 #### 修改文件：
-- `trac_ik_lib/include/trac_ik/nlopt_ik.hpp` - 更新为使用 Pinocchio 数据类型
-- `trac_ik_lib/src/nlopt_ik.cpp` - 更新为使用 Pinocchio 运动学函数
-- `trac_ik_lib/include/trac_ik/trac_ik.hpp` - 更新主接口为 Pinocchio
-- `trac_ik_lib/src/trac_ik.cpp` - 更新主实现为 Pinocchio
-- `trac_ik_lib/include/trac_ik/urdf.hpp` - 更新 URDF 加载接口
-- `trac_ik_lib/src/urdf.cpp` - 使用 Pinocchio 的 URDF 解析器
-- `trac_ik_lib/CMakeLists.txt` - 替换 orocos_kdl 依赖为 pinocchio
+- `pin_ik_lib/include/pin_ik/nlopt_ik.hpp` - 更新为使用 Pinocchio 数据类型
+- `pin_ik_lib/src/nlopt_ik.cpp` - 更新为使用 Pinocchio 运动学函数
+- `pin_ik_lib/include/pin_ik/pin_ik.hpp` - 更新主接口为 Pinocchio
+- `pin_ik_lib/src/pin_ik.cpp` - 更新主实现为 Pinocchio
+- `pin_ik_lib/include/pin_ik/urdf.hpp` - 更新 URDF 加载接口
+- `pin_ik_lib/src/urdf.cpp` - 使用 Pinocchio 的 URDF 解析器
+- `pin_ik_lib/CMakeLists.txt` - 替换 orocos_kdl 依赖为 pinocchio
 
 #### 删除文件：
-- `trac_ik_lib/include/trac_ik/kdl_tl.hpp` (已删除)
-- `trac_ik_lib/src/kdl_tl.cpp` (已删除)
+- `pin_ik_lib/include/pin_ik/kdl_tl.hpp` (已删除)
+- `pin_ik_lib/src/kdl_tl.cpp` (已删除)
 
 ### 2. 数据类型映射
 
@@ -42,20 +42,20 @@
 | `ChainFkSolverPos_recursive::JntToCart()` | `pinocchio::forwardKinematics()` + `pinocchio::updateFramePlacements()` |
 | `ChainIkSolverVel_pinv` | Jacobian 伪逆 (使用 `pinocchio::computeFrameJacobian()`) |
 | `ChainJntToJacSolver::JntToJac()` | `pinocchio::computeFrameJacobian()` |
-| `KDL::diffRelative()` | 自定义 `TRAC_IK::diffRelative()` (使用 `pinocchio::log6()`) |
+| `KDL::diffRelative()` | 自定义 `PIN_IK::diffRelative()` (使用 `pinocchio::log6()`) |
 
 ### 4. 测试和示例更新
 
-- `trac_ik_examples/src/ik_tests.cpp` - 更新为使用 Pinocchio API
+- `pin_ik_examples/src/ik_tests.cpp` - 更新为使用 Pinocchio API
 - `tests/standalone_tests.cpp` - 更新为使用 Pinocchio API
 
 ### 5. Python 绑定更新
 
-- `trac_ik_python/swig/trac_ik_wrap.i` - 更新 SWIG 接口为 Pinocchio
+- `pin_ik_python/swig/pin_ik_wrap.i` - 更新 SWIG 接口为 Pinocchio
 
 ### 6. CMake 配置更新
 
-- `cmake/trac_ikConfig.cmake.in` - 替换 orocos_kdl 依赖为 pinocchio
+- `cmake/pin_ikConfig.cmake.in` - 替换 orocos_kdl 依赖为 pinocchio
 - 所有 CMakeLists.txt 文件已更新
 
 ## 依赖要求
@@ -88,7 +88,7 @@ sudo apt-get install libnlopt-dev libnlopt-cxx-dev
 
 ### 2. 编译项目
 ```bash
-cd /home/think/Documents/GitHub/trac_ik
+cd /home/think/Documents/GitHub/pin_ik
 rm -rf build
 mkdir build
 cd build
@@ -101,7 +101,7 @@ make -j$(nproc)
 # 假设有一个测试 URDF 文件
 cd build
 ./tests/standalone_tests <path_to_test_urdf>
-./trac_ik_examples/ik_tests <path_to_urdf> base_link tip_link 100
+./pin_ik_examples/ik_tests <path_to_urdf> base_link tip_link 100
 ```
 
 ### 4. 安装库
@@ -139,7 +139,7 @@ sudo make install
 // 旧 API (KDL)
 KDL::Chain chain;
 KDL::JntArray q_min, q_max;
-TRAC_IK::TRAC_IK solver(chain, q_min, q_max, timeout, epsilon);
+PIN_IK::PIN_IK solver(chain, q_min, q_max, timeout, epsilon);
 KDL::Frame target;
 KDL::JntArray seed, result;
 solver.CartToJnt(seed, target, result);
@@ -148,7 +148,7 @@ solver.CartToJnt(seed, target, result);
 pinocchio::Model model;
 Eigen::VectorXd q_min, q_max;
 pinocchio::FrameIndex tip_frame_id;
-TRAC_IK::TRAC_IK solver(model, q_min, q_max, tip_frame_id, timeout, epsilon);
+PIN_IK::PIN_IK solver(model, q_min, q_max, tip_frame_id, timeout, epsilon);
 pinocchio::SE3 target;
 Eigen::VectorXd seed, result;
 solver.CartToJnt(seed, target, result);
@@ -185,7 +185,7 @@ Pinocchio 相比 KDL 的优势：
 
 如有问题或需要进一步的帮助，请参考：
 - Pinocchio 文档: https://stack-of-tasks.github.io/pinocchio/
-- TRAC-IK 原始文档: https://bitbucket.org/traclabs/trac_ik/
+- PIN-IK 原始文档: https://bitbucket.org/traclabs/pin_ik/
 
 ---
 迁移完成时间: 2024

@@ -1,4 +1,4 @@
-#include <trac_ik/trac_ik.hpp>
+#include <pin_ik/pin_ik.hpp>
 #include <iostream>
 
 int main() {
@@ -17,7 +17,7 @@ int main() {
 )";
 
     try {
-        TRAC_IK::TRAC_IK solver("base", "tip", urdf, 0.03);
+        PIN_IK::PIN_IK solver("base", "tip", urdf, 0.03);
 
         pinocchio::Model model;
         Eigen::VectorXd lo, hi;

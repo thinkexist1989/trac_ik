@@ -1,4 +1,4 @@
-# TRAC-IK
+# PIN-IK
 
 独立的 C++17/Python 3 逆运动学求解器，基于 Pinocchio 4.x 运动学库和 NLopt 优化器。
 
@@ -74,13 +74,13 @@ ctest --test-dir build --output-on-failure
 ### 构建选项
 ```bash
 # 禁用 Python 绑定
-cmake -S . -B build -DTRAC_IK_BUILD_PYTHON=OFF
+cmake -S . -B build -DPIN_IK_BUILD_PYTHON=OFF
 
 # 禁用示例
-cmake -S . -B build -DTRAC_IK_BUILD_EXAMPLES=OFF
+cmake -S . -B build -DPIN_IK_BUILD_EXAMPLES=OFF
 
 # 同时禁用两者
-cmake -S . -B build -DTRAC_IK_BUILD_PYTHON=OFF -DTRAC_IK_BUILD_EXAMPLES=OFF
+cmake -S . -B build -DPIN_IK_BUILD_PYTHON=OFF -DPIN_IK_BUILD_EXAMPLES=OFF
 ```
 
 ## 安装
@@ -97,17 +97,17 @@ cmake --install build --prefix /path/to/install
 ```
 
 安装后：
-- 头文件：`<prefix>/include/trac_ik/`
-- 库文件：`<prefix>/lib/libtrac_ik.so`
-- CMake 配置：`<prefix>/lib/cmake/trac_ik/`
-- Python 模块：`<prefix>/lib/python3.x/site-packages/trac_ik_python/`
+- 头文件：`<prefix>/include/pin_ik/`
+- 库文件：`<prefix>/lib/libpin_ik.so`
+- CMake 配置：`<prefix>/lib/cmake/pin_ik/`
+- Python 模块：`<prefix>/lib/python3.x/site-packages/pin_ik_python/`
 
 ## 使用
 
 ### C++ API
 
 ```cpp
-#include <trac_ik/trac_ik.hpp>
+#include <pin_ik/pin_ik.hpp>
 #include <pinocchio/spatial/se3.hpp>
 
 // 从 URDF 文件创建求解器
@@ -115,7 +115,7 @@ std::string urdf_xml = ...; // 读取 URDF 内容
 double timeout = 0.005;     // 5ms 超时
 double epsilon = 1e-5;      // 位姿精度
 
-TRAC_IK::TRAC_IK solver("base_link", "tip_link", urdf_xml, timeout, epsilon);
+PIN_IK::PIN_IK solver("base_link", "tip_link", urdf_xml, timeout, epsilon);
 
 // 或从 Pinocchio 模型创建
 pinocchio::Model model;
@@ -123,8 +123,8 @@ Eigen::VectorXd lower_limits, upper_limits;
 pinocchio::FrameIndex tip_frame_id;
 // ... 加载模型 ...
 
-TRAC_IK::TRAC_IK solver(model, lower_limits, upper_limits, tip_frame_id, 
-                        timeout, epsilon, TRAC_IK::Speed);
+PIN_IK::PIN_IK solver(model, lower_limits, upper_limits, tip_frame_id, 
+                        timeout, epsilon, PIN_IK::Speed);
 
 // 求解 IK
 Eigen::VectorXd seed(num_joints);     // 初始关节角度
@@ -153,7 +153,7 @@ if (solver.getSolutions(solutions)) {
 ### Python API
 
 ```python
-from trac_ik_python.trac_ik import IK
+from pin_ik_python.pin_ik import IK
 
 # 创建求解器
 ik_solver = IK("base_link", "tip_link", urdf_string="...",
@@ -178,17 +178,17 @@ else:
 ### CMake 集成
 
 ```cmake
-find_package(trac_ik REQUIRED)
+find_package(pin_ik REQUIRED)
 
 add_executable(my_app main.cpp)
-target_link_libraries(my_app trac_ik::trac_ik)
+target_link_libraries(my_app pin_ik::pin_ik)
 ```
 
 ## 示例
 
 ```bash
 # 运行 C++ 示例（100 次随机测试）
-./build/trac_ik_examples/ik_tests tests/robot.urdf base tip 100
+./build/pin_ik_examples/ik_tests tests/robot.urdf base tip 100
 
 # 运行独立测试
 ./build/tests/standalone_tests tests/robot.urdf
@@ -204,7 +204,7 @@ target_link_libraries(my_app trac_ik::trac_ik)
 
 ## 性能考虑
 
-- **并发**: 每个 `TRAC_IK` 实例不可被多个线程同时调用，但可创建多个实例并行使用
+- **并发**: 每个 `PIN_IK` 实例不可被多个线程同时调用，但可创建多个实例并行使用
 - **超时**: 建议 5-10ms，根据机器人复杂度调整
 - **初始化**: 使用接近目标的 seed 可提高成功率和速度
 
@@ -276,17 +276,17 @@ BSD 3-Clause License - 详见 [LICENSE.txt](LICENSE.txt)
 
 ## 致谢
 
-- 原始 TRAC-IK: TRACLabs, Inc.
+- 原始 PIN-IK: TRACLabs, Inc.
 - Pinocchio: LAAS-CNRS 和 INRIA
 - NLopt: Steven G. Johnson
 
 ## 引用
 
-如果在研究中使用 TRAC-IK，请引用：
+如果在研究中使用 PIN-IK，请引用：
 
 ```bibtex
 @inproceedings{beeson2015trac,
-  title={TRAC-IK: An open-source library for improved solving of generic inverse kinematics},
+  title={PIN-IK: An open-source library for improved solving of generic inverse kinematics},
   author={Beeson, Patrick and Ames, Barrett},
   booktitle={IEEE-RAS International Conference on Humanoid Robots},
   year={2015}
