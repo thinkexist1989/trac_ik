@@ -73,40 +73,16 @@ void PIN_IK::initialize()
   if (!std::isfinite(maxtime) || maxtime <= 0 || !std::isfinite(eps) || eps <= 0)
     throw std::invalid_argument("Timeout and epsilon must be finite and positive");
 
-  if (model.nq == 0 || model.nq != lb.size() || lb.size() != ub.size())
+  if (model.nv == 0 || model.nv != lb.size() || lb.size() != ub.size())
     throw std::invalid_argument("Invalid model or joint limit dimensions");
 
-  for (int i = 0; i < lb.size(); ++i)
-    if (!std::isfinite(lb(i)) || !std::isfinite(ub(i)) || lb(i) > ub(i))
-      throw std::invalid_argument("Invalid joint limits");
+  validateLimits(model, lb, ub);
+  if (tip_frame_id >= model.frames.size())
+    throw std::invalid_argument("Invalid tip frame");
 
   resetSolvers();
 
-  // Determine joint types
-  for (pinocchio::JointIndex i = 1; i < model.joints.size(); i++)
-  {
-    const auto& joint = model.joints[i];
-    if (joint.nq() == 0) continue;
-
-    int idx = joint.idx_q();
-    if (joint.shortname() == "JointModelRX" || joint.shortname() == "JointModelRY" ||
-        joint.shortname() == "JointModelRZ" || joint.shortname() == "JointModelRUBX" ||
-        joint.shortname() == "JointModelRUBY" || joint.shortname() == "JointModelRUBZ")
-    {
-      if (ub(idx) >= std::numeric_limits<float>::max() &&
-          lb(idx) <= std::numeric_limits<float>::lowest())
-        types.push_back(Continuous);
-      else
-        types.push_back(RotJoint);
-    }
-    else if (joint.shortname() == "JointModelPX" || joint.shortname() == "JointModelPY" ||
-             joint.shortname() == "JointModelPZ")
-      types.push_back(TransJoint);
-    else
-      types.push_back(RotJoint);
-  }
-
-  assert(types.size() == static_cast<size_t>(lb.size()));
+  types = ::PIN_IK::jointTypes(model);
 
   initialized = true;
 }
@@ -316,8 +292,8 @@ Eigen::VectorXd PIN_IK::computeSingularValues(const Eigen::VectorXd& arr)
   pinocchio::Data::Matrix6x J(6, model.nv);
   J.setZero();
 
-  pinocchio::forwardKinematics(model, *data, arr);
-  pinocchio::computeFrameJacobian(model, *data, arr, tip_frame_id,
+  pinocchio::forwardKinematics(model, *data, ::PIN_IK::toPinocchioConfiguration(model, arr));
+  pinocchio::computeFrameJacobian(model, *data, ::PIN_IK::toPinocchioConfiguration(model, arr), tip_frame_id,
                                    pinocchio::LOCAL_WORLD_ALIGNED, J);
 
   Eigen::JacobiSVD<Eigen::MatrixXd> svdsolver(J);
@@ -327,7 +303,7 @@ Eigen::VectorXd PIN_IK::computeSingularValues(const Eigen::VectorXd& arr)
 int PIN_IK::CartToJnt(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in,
                        Eigen::VectorXd &q_out, const pinocchio::Motion& _bounds)
 {
-  if (q_init.size() != model.nq) return -1;
+  if (q_init.size() != model.nv || !q_init.allFinite()) return -1;
 
   if (!initialized)
   {

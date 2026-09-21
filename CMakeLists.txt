@@ -3,8 +3,8 @@ project(pin_ik VERSION 2.2.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 include(CTest)
 
-# Find coal early (required by Pinocchio 4.x)
-find_package(coal REQUIRED)
+# Import Pinocchio and its transitive targets in the scope shared by all subdirectories.
+find_package(pinocchio 3.9.0 EXACT REQUIRED)
 
 option(PIN_IK_BUILD_PYTHON "Build Python 3 bindings" ON)
 option(PIN_IK_BUILD_EXAMPLES "Build standalone IK example" ON)

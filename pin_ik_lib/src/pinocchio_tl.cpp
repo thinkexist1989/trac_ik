@@ -46,42 +46,20 @@ ChainIkSolverPos_TL::ChainIkSolverPos_TL(const pinocchio::Model& _model,
   model(_model), tip_frame_id(_tip_frame_id), q_min(_q_min), q_max(_q_max),
   delta_q(_model.nv), maxtime(_maxtime), eps(_eps), rr(_random_restart), wrap(_try_jl_wrap)
 {
-  assert(model.nq == _q_min.size());
-  assert(model.nq == _q_max.size());
+  ::PIN_IK::validateLimits(model, _q_min, _q_max);
+  if (tip_frame_id >= model.frames.size()) throw std::invalid_argument("Invalid tip frame");
 
   data.reset(new pinocchio::Data(model));
   reset();
 
-  // Determine joint types
-  for (pinocchio::JointIndex i = 1; i < model.joints.size(); i++)
-  {
-    const auto& joint = model.joints[i];
-    if (joint.nq() == 0) continue; // Skip fixed joints
+  types = ::PIN_IK::jointTypes(model);
 
-    int idx = joint.idx_q();
-    if (joint.shortname() == "JointModelRX" || joint.shortname() == "JointModelRY" ||
-        joint.shortname() == "JointModelRZ" || joint.shortname() == "JointModelRUBX" ||
-        joint.shortname() == "JointModelRUBY" || joint.shortname() == "JointModelRUBZ")
-    {
-      if (q_max(idx) >= std::numeric_limits<float>::max() &&
-          q_min(idx) <= std::numeric_limits<float>::lowest())
-        types.push_back(Continuous);
-      else
-        types.push_back(RotJoint);
-    }
-    else if (joint.shortname() == "JointModelPX" || joint.shortname() == "JointModelPY" ||
-             joint.shortname() == "JointModelPZ")
-      types.push_back(TransJoint);
-    else
-      types.push_back(RotJoint); // Default to rotational
-  }
-
-  assert(types.size() == static_cast<size_t>(_q_max.size()));
 }
 
 int ChainIkSolverPos_TL::CartToJnt(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in,
                                     Eigen::VectorXd &q_out, const pinocchio::Motion _bounds)
 {
+  if (q_init.size() != model.nv || !q_init.allFinite()) return -1;
   if (aborted)
     return -3;
 
@@ -94,7 +72,7 @@ int ChainIkSolverPos_TL::CartToJnt(const Eigen::VectorXd &q_init, const pinocchi
   do
   {
     // Forward kinematics
-    pinocchio::forwardKinematics(model, *data, q_out);
+    pinocchio::forwardKinematics(model, *data, ::PIN_IK::toPinocchioConfiguration(model, q_out));
     pinocchio::updateFramePlacements(model, *data);
     f = data->oMf[tip_frame_id];
 
@@ -125,7 +103,7 @@ int ChainIkSolverPos_TL::CartToJnt(const Eigen::VectorXd &q_init, const pinocchi
     // Compute Jacobian
     pinocchio::Data::Matrix6x J(6, model.nv);
     J.setZero();
-    pinocchio::computeFrameJacobian(model, *data, q_out, tip_frame_id,
+    pinocchio::computeFrameJacobian(model, *data, ::PIN_IK::toPinocchioConfiguration(model, q_out), tip_frame_id,
                                      pinocchio::LOCAL, J);
 
     // Solve for delta_q using pseudo-inverse
@@ -134,9 +112,8 @@ int ChainIkSolverPos_TL::CartToJnt(const Eigen::VectorXd &q_init, const pinocchi
 
     delta_q = J.completeOrthogonalDecomposition().solve(twist_vec);
 
-    // Use pinocchio::integrate for proper manifold update
-    Eigen::VectorXd q_curr(model.nq);
-    pinocchio::integrate(model, q_out, delta_q, q_curr);
+    // Scalar angles are the coordinates of the supported one-DOF joints.
+    Eigen::VectorXd q_curr = q_out + delta_q;
 
     // Apply joint limits
     for (int j = 0; j < q_min.size(); j++)

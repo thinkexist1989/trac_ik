@@ -93,7 +93,7 @@ public:
 
       pinocchio::Model model;
       $self->getModel(model);
-      if (q_init.size() != model.nq) throw std::invalid_argument("Wrong seed size");
+      if (q_init.size() != model.nv) throw std::invalid_argument("Wrong seed size");
 
       Eigen::VectorXd in(q_init.size()), out(q_init.size());
 
@@ -125,7 +125,7 @@ public:
     int getNrOfJointsInChain(){
       pinocchio::Model model;
       $self->getModel(model);
-      return (int) model.nq;
+      return (int) model.nv;
     }
 
     // Convenience method to get the list of joint names as used internally

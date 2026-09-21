@@ -31,8 +31,15 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef PINOCCHIO_TYPES_HPP
 #define PINOCCHIO_TYPES_HPP
 
-#include <pinocchio/multibody.hpp>
-#include <pinocchio/spatial.hpp>
+#include <pinocchio/fwd.hpp>
+#include <pinocchio/multibody/model.hpp>
+#include <pinocchio/multibody/data.hpp>
+#include <pinocchio/spatial/explog.hpp>
+#include <stdexcept>
+#include <cmath>
+#include <limits>
+#include <vector>
+#include <string>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/jacobian.hpp>
@@ -49,7 +56,7 @@ enum BasicJointType {
   Continuous = 2
 };
 
-// Type aliases for Pinocchio 4.x
+// Type aliases for Pinocchio 3.9.0
 // Default instantiation: double scalar, column-major (Options=0), default joint collection
 using Model = pinocchio::ModelTpl<double, 0, pinocchio::JointCollectionDefaultTpl>;
 using Data = pinocchio::DataTpl<double, 0, pinocchio::JointCollectionDefaultTpl>;
@@ -58,6 +65,61 @@ using Motion = pinocchio::MotionTpl<double, 0>;
 using Frame = pinocchio::FrameTpl<double, 0>;
 using FrameIndex = pinocchio::FrameIndex;
 using JointIndex = pinocchio::JointIndex;
+
+// IK uses one scalar per joint (nv); Pinocchio uses (cos(theta), sin(theta))
+// for unbounded revolute joints. Multi-DOF joints are deliberately unsupported.
+inline bool isContinuous(const pinocchio::JointModel& joint) {
+  return joint.nv() == 1 && joint.nq() == 2 &&
+    (joint.shortname().find("RevoluteUnbounded") != std::string::npos ||
+     joint.shortname().find("JointModelRUB") == 0);
+}
+
+inline std::vector<BasicJointType> jointTypes(const Model& model) {
+  std::vector<BasicJointType> result(model.nv);
+  for (JointIndex i = 1; i < model.joints.size(); ++i) {
+    const auto& j = model.joints[i];
+    const auto name = j.shortname();
+    // Aligned continuous joints use JointModelRUBX/Y/Z short names.
+    const bool continuous = isContinuous(j);
+    const bool prismatic = name.find("JointModelP") == 0;
+    const bool revolute = name.find("JointModelR") == 0;
+    if (j.nv() != 1 || (!continuous && j.nq() != 1) || (!prismatic && !revolute))
+      throw std::invalid_argument("Only revolute, continuous and prismatic joints are supported");
+    result[j.idx_v()] = continuous ? Continuous : (prismatic ? TransJoint : RotJoint);
+  }
+  return result;
+}
+
+inline Eigen::VectorXd toPinocchioConfiguration(const Model& model, const Eigen::VectorXd& angles) {
+  if (angles.size() != model.nv || !angles.allFinite())
+    throw std::invalid_argument("Expected finite joint values of size model.nv");
+  Eigen::VectorXd q(model.nq);
+  for (JointIndex i = 1; i < model.joints.size(); ++i) {
+    const auto& j = model.joints[i];
+    if (j.nv() != 1 || (j.nq() != 1 && j.nq() != 2))
+      throw std::invalid_argument("Unsupported joint configuration");
+    const double angle = angles[j.idx_v()];
+    if (j.nq() == 2) {
+      q[j.idx_q()] = std::cos(angle);
+      q[j.idx_q() + 1] = std::sin(angle);
+    } else q[j.idx_q()] = angle;
+  }
+  return q;
+}
+
+inline void validateLimits(const Model& model, const Eigen::VectorXd& lo, const Eigen::VectorXd& hi) {
+  const auto types = jointTypes(model);
+  if (lo.size() != model.nv || hi.size() != model.nv)
+    throw std::invalid_argument("Wrong joint limit dimensions (expected model.nv)");
+  for (int i = 0; i < model.nv; ++i) {
+    if (types[i] == Continuous) {
+      if (lo[i] != -std::numeric_limits<double>::infinity() ||
+          hi[i] != std::numeric_limits<double>::infinity())
+        throw std::invalid_argument("Continuous joint limits must be (-inf, +inf)");
+    } else if (!std::isfinite(lo[i]) || !std::isfinite(hi[i]) || lo[i] > hi[i])
+      throw std::invalid_argument("Invalid joint limits");
+  }
+}
 
 // Helper function to compute pose difference for IK
 inline Motion diffRelative(const SE3& current, const SE3& target) {

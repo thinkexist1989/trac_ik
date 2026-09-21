@@ -27,40 +27,21 @@ int main(int argc, char** argv) {
     pinocchio::Model model;
     Eigen::VectorXd lo, hi;
     require(parsed.getModel(model) && parsed.getLimits(lo, hi), "Initialization failed");
-    std::cout << "DEBUG: model.nq=" << model.nq << ", lo.size()=" << lo.size() << ", hi.size()=" << hi.size() << std::endl;
-    // In Pinocchio 4.x, continuous joints use 2 DOF (cos, sin) representation
-    // So we have: 3 prismatic + 2 revolute + 2 continuous = 7 DOF
-    require(model.nq == 7, "Wrong number of joints");
-    std::cout << "DEBUG: lo = [" << lo.transpose() << "]" << std::endl;
-    std::cout << "DEBUG: hi = [" << hi.transpose() << "]" << std::endl;
-    // Pinocchio doesn't parse safety_controller, only limit tags
+    require(model.nq == 7 && model.nv == 6, "Wrong configuration/tangent dimensions");
+    require(lo.size() == 6 && hi.size() == 6, "Limits must use scalar joint coordinates");
     require(lo(0) == -1.0 && hi(0) == 1.0, "Joint limits missing");
-    // Continuous joint (yaw) uses 2 DOF (cos, sin) representation at indices 5-6
-    // Limits are slightly > 1 to accommodate numerical errors in unit circle
-    require(hi(5) > 1.0 && hi(6) > 1.0, "Continuous limits missing");
+    require(std::isinf(lo(5)) && lo(5) < 0 && std::isinf(hi(5)) && hi(5) > 0,
+            "Continuous limits missing");
 
     pinocchio::Data data(model);
     pinocchio::FrameIndex tip_frame_id = model.getFrameId("tip", pinocchio::BODY);
 
-    // Debug: print joint information
-    std::cout << "Model joints:" << std::endl;
-    for (size_t i = 0; i < model.njoints; ++i) {
-        std::cout << "  Joint " << i << ": " << model.names[i]
-                  << " (nq=" << model.joints[i].nq()
-                  << ", nv=" << model.joints[i].nv()
-                  << ", idx_q=" << model.joints[i].idx_q()
-                  << ", idx_v=" << model.joints[i].idx_v() << ")" << std::endl;
-    }
-    std::cout << "Total: nq=" << model.nq << ", nv=" << model.nv << std::endl;
-
-    // Configuration: 3 prismatic + 2 revolute + 2 continuous (cos, sin)
-    Eigen::VectorXd q(7), seed(7), out;
-    // Set: x=0.3, y=-0.2, z=0.4, roll=0.2, pitch=-0.3, yaw=0.7 (as angle)
-    q << 0.3, -0.2, 0.4, 0.2, -0.3, std::cos(0.7), std::sin(0.7);
+    Eigen::VectorXd q(6), seed(6), out;
+    q << 0.3, -0.2, 0.4, 0.2, -0.3, 0.7;
     seed.setZero();
-    seed(5) = 1.0; // cos(0) = 1 for continuous joint
+    seed(5) = 8 * M_PI; // Preserve the seed's winding, not just [-pi, pi].
 
-    pinocchio::forwardKinematics(model, data, q);
+    pinocchio::forwardKinematics(model, data, PIN_IK::toPinocchioConfiguration(model, q));
     pinocchio::updateFramePlacements(model, data);
     pinocchio::SE3 goal = data.oMf[tip_frame_id];
 
@@ -72,9 +53,9 @@ int main(int argc, char** argv) {
     Eigen::Matrix3d rotation = R_x * R_y * R_z;
 
     Eigen::Matrix3d R_rpy;
-    R_rpy = Eigen::AngleAxisd(0.1, Eigen::Vector3d::UnitX()) *
+    R_rpy = Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitZ()) *
             Eigen::AngleAxisd(0.2, Eigen::Vector3d::UnitY()) *
-            Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitZ());
+            Eigen::AngleAxisd(0.1, Eigen::Vector3d::UnitX());
 
     Eigen::Vector3d translation = q.head<3>() + rotation * Eigen::Vector3d(0.1, 0.2, 0.3);
     pinocchio::SE3 expected(rotation * R_rpy, translation);
@@ -85,17 +66,120 @@ int main(int argc, char** argv) {
       PIN_IK::PIN_IK solver(model, lo, hi, tip_frame_id, 0.03, 1e-6, mode);
       require(solver.CartToJnt(seed, goal, out) >= 0, "IK failed");
 
-      pinocchio::forwardKinematics(model, data, out);
+      pinocchio::forwardKinematics(model, data, PIN_IK::toPinocchioConfiguration(model, out));
       pinocchio::updateFramePlacements(model, data);
       pinocchio::SE3 actual = data.oMf[tip_frame_id];
 
       require(actual.isApprox(goal, 1e-5), "IK residual too large");
-      for (int i = 0; i < 7; ++i)
+      for (int i = 0; i < 6; ++i)
         require(out(i) >= lo(i)-1e-8 && out(i) <= hi(i)+1e-8, "Joint limit violation");
 
+      require(std::abs(out(5) - seed(5)) <= M_PI, "Continuous solution not near seed");
       std::vector<Eigen::VectorXd> solutions;
       require(solver.getSolutions(solutions), "Solutions missing");
     }
+
+    // Exercise both algorithms independently, including non-axis-aligned continuous joints.
+    for (const auto& axis : {std::string("1 0 0"), std::string("0 1 0"),
+                             std::string("0 0 1"), std::string("0.6 0.8 0")}) {
+      const std::string continuous_xml =
+        "<robot name='continuous'><link name='base'/><link name='tip'/>"
+        "<joint name='spin' type='continuous'><parent link='base'/><child link='tip'/>"
+        "<axis xyz='" + axis + "'/></joint></robot>";
+      pinocchio::Model cm;
+      Eigen::VectorXd cl, cu;
+      pinocchio::FrameIndex cf;
+      PIN_IK::loadURDFModel(continuous_xml, "base", "tip", cm, cl, cu, cf);
+      require(cm.nq == 2 && cm.nv == 1, "Continuous joint dimensions");
+      Eigen::VectorXd angle(1), initial(1), result;
+      angle[0] = -M_PI + 0.04;
+      initial[0] = 10 * M_PI + M_PI - 0.04;
+      pinocchio::Data cd(cm);
+      const auto cq = PIN_IK::toPinocchioConfiguration(cm, angle);
+      require(std::abs(cq.norm() - 1) < 1e-12, "Unit circle conversion");
+      pinocchio::forwardKinematics(cm, cd, cq);
+      pinocchio::updateFramePlacements(cm, cd);
+      const auto target = cd.oMf[cf];
+      PIN_IK::ChainIkSolverPos_TL newton(cm, cl, cu, cf, 0.1, 1e-6);
+      NLOPT_IK::NLOPT_IK nlopt(cm, cl, cu, cf, 0.1, 1e-6);
+      require(newton.CartToJnt(initial, target, result) >= 0, "Continuous Newton IK");
+      require(std::abs(result[0] - initial[0] - 0.08) < 1e-5, "Newton winding");
+      require(nlopt.CartToJnt(initial, target, result) >= 0, "Continuous NLopt IK");
+      pinocchio::forwardKinematics(cm, cd, PIN_IK::toPinocchioConfiguration(cm, result));
+      pinocchio::updateFramePlacements(cm, cd);
+      require(cd.oMf[cf].isApprox(target, 1e-5), "Continuous NLopt residual");
+      PIN_IK::PIN_IK combined(cm, cl, cu, cf, 0.1, 1e-6);
+      require(combined.CartToJnt(initial, target, result) >= 0, "Continuous combined IK");
+      require(std::abs(result[0] - initial[0] - 0.08) < 1e-5, "Combined winding");
+      Eigen::VectorXd invalid = cl;
+      invalid[0] = 0;
+      rejects([&]{ combined.setLimits(invalid, cu); });
+      require(combined.setLimits(cl, cu), "Continuous setLimits");
+    }
+
+    // Non-root base: remove upstream joints and express the goal in the base frame.
+    PIN_IK::PIN_IK subchain("pitch", "tip", xml, 0.1);
+    pinocchio::Model submodel;
+    subchain.getModel(submodel);
+    require(submodel.nv == 1 && submodel.nq == 2, "Subchain includes upstream joints");
+    pinocchio::Data subdata(submodel);
+    Eigen::VectorXd subq(1);
+    subq[0] = q[5];
+    pinocchio::forwardKinematics(submodel, subdata, PIN_IK::toPinocchioConfiguration(submodel, subq));
+    pinocchio::updateFramePlacements(submodel, subdata);
+    pinocchio::forwardKinematics(model, data, PIN_IK::toPinocchioConfiguration(model, q));
+    pinocchio::updateFramePlacements(model, data);
+    require(subdata.oMf[submodel.getFrameId("tip", pinocchio::BODY)].isApprox(
+      data.oMf[model.getFrameId("pitch", pinocchio::BODY)].actInv(data.oMf[tip_frame_id]), 1e-10),
+      "Subchain reference frame");
+
+    // A fixed, offset base and an unrelated branch must not leak into the IK chain.
+    const std::string branched = R"(<robot name="branched">
+      <link name="root"/><link name="mount"/><link name="base"/><link name="a"/>
+      <link name="b"/><link name="tip"/><link name="other"/>
+      <joint name="upstream" type="continuous"><parent link="root"/><child link="mount"/></joint>
+      <joint name="offset" type="fixed"><parent link="mount"/><child link="base"/>
+        <origin xyz="0.2 0.3 0.4" rpy="0.1 0.2 0.3"/></joint>
+      <joint name="first" type="continuous"><parent link="base"/><child link="a"/><axis xyz="1 0 0"/></joint>
+      <joint name="slide" type="prismatic"><parent link="a"/><child link="b"/>
+        <axis xyz="0.6 0.8 0"/><limit lower="-1" upper="1" effort="1" velocity="1"/></joint>
+      <joint name="last" type="continuous"><parent link="b"/><child link="tip"/><axis xyz="0 0 1"/></joint>
+      <joint name="branch" type="continuous"><parent link="root"/><child link="other"/></joint>
+      </robot>)";
+    pinocchio::Model chain, full;
+    Eigen::VectorXd bl, bu;
+    pinocchio::FrameIndex bf;
+    PIN_IK::loadURDFModel(branched, "base", "tip", chain, bl, bu, bf);
+    require(chain.nv == 3 && chain.nq == 5, "Mixed continuous dimensions");
+    require(bl.size() == 3 && bl[1] == -1 && bu[1] == 1, "Mixed limit indexing");
+    Eigen::VectorXd bq(3);
+    bq << 0.3, 0.4, -0.7;
+    const auto native = PIN_IK::toPinocchioConfiguration(chain, bq);
+    require(std::abs(native[2] - 0.4) < 1e-12 &&
+            std::abs(native[3] - std::cos(-0.7)) < 1e-12, "Mixed configuration indexing");
+    pinocchio::urdf::buildModelFromXML(branched, full);
+    Eigen::VectorXd fq = Eigen::VectorXd::Zero(full.nv);
+    fq[full.joints[full.getJointId("first")].idx_v()] = bq[0];
+    fq[full.joints[full.getJointId("slide")].idx_v()] = bq[1];
+    fq[full.joints[full.getJointId("last")].idx_v()] = bq[2];
+    fq[full.joints[full.getJointId("upstream")].idx_v()] = 0.9;
+    pinocchio::Data fd(full), bd(chain);
+    pinocchio::forwardKinematics(full, fd, PIN_IK::toPinocchioConfiguration(full, fq));
+    pinocchio::updateFramePlacements(full, fd);
+    pinocchio::forwardKinematics(chain, bd, native);
+    pinocchio::updateFramePlacements(chain, bd);
+    const auto bgoal = bd.oMf[bf];
+    require(bgoal.isApprox(fd.oMf[full.getFrameId("base", pinocchio::BODY)].actInv(
+      fd.oMf[full.getFrameId("tip", pinocchio::BODY)]), 1e-10), "Fixed-base extraction");
+    PIN_IK::PIN_IK bsolver(chain, bl, bu, bf, 0.1, 1e-6);
+    Eigen::VectorXd bseed = Eigen::VectorXd::Zero(3), bout;
+    bseed[0] = 4 * M_PI;
+    bseed[2] = -6 * M_PI;
+    require(bsolver.CartToJnt(bseed, bgoal, bout) >= 0, "Mixed continuous IK");
+    pinocchio::forwardKinematics(chain, bd, PIN_IK::toPinocchioConfiguration(chain, bout));
+    pinocchio::updateFramePlacements(chain, bd);
+    require(bd.oMf[bf].isApprox(bgoal, 1e-5), "Mixed continuous FK residual");
+    rejects([&]{ PIN_IK::PIN_IK bad("other", "tip", branched); });
 
     // Test a 6R arm
     pinocchio::Model arm_model;
@@ -118,6 +202,7 @@ int main(int argc, char** argv) {
       else
         parent_id = arm_model.addJoint(parent_id, pinocchio::JointModelRX(), placement, joint_name);
 
+      arm_model.addJointFrame(parent_id);
       arm_model.appendBodyToJoint(parent_id, inertia, pinocchio::SE3::Identity());
       arm_model.addBodyFrame(body_name, parent_id, pinocchio::SE3::Identity());
     }
@@ -175,9 +260,9 @@ int main(int argc, char** argv) {
     pinocchio::SE3 rotated_actual = rotated_data.oMf[rotated_tip_id];
 
     Eigen::Matrix3d expected_rot;
-    expected_rot = Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitX()) *
+    expected_rot = Eigen::AngleAxisd(0.7, Eigen::Vector3d::UnitZ()) *
                    Eigen::AngleAxisd(-0.2, Eigen::Vector3d::UnitY()) *
-                   Eigen::AngleAxisd(0.7, Eigen::Vector3d::UnitZ()) *
+                   Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitX()) *
                    Eigen::AngleAxisd(0.6, Eigen::Vector3d::UnitY());
     pinocchio::SE3 rotated_expected(expected_rot, Eigen::Vector3d(0.2, -0.1, 0.4));
 

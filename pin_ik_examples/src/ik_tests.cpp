@@ -58,12 +58,12 @@ int main(int argc, char** argv) {
     pinocchio::Data data(model);
     pinocchio::FrameIndex tip_frame_id = model.getFrameId(argv[3]);
 
-    Eigen::VectorXd target(model.nq), seed(model.nq), result;
+    Eigen::VectorXd target(model.nv), seed(model.nv), result;
     std::mt19937 rng(42);
     int success = 0;
 
     for (int i = 0; i < samples; ++i) {
-      for (int j = 0; j < model.nq; ++j) {
+      for (int j = 0; j < model.nv; ++j) {
         const double lo = lower(j) <= std::numeric_limits<float>::lowest() ? -M_PI : lower(j);
         const double hi = upper(j) >= std::numeric_limits<float>::max() ? M_PI : upper(j);
         target(j) = std::uniform_real_distribution<double>(lo, hi)(rng);
@@ -71,14 +71,14 @@ int main(int argc, char** argv) {
       }
 
       // Forward kinematics to get goal pose
-      pinocchio::forwardKinematics(model, data, target);
+      pinocchio::forwardKinematics(model, data, PIN_IK::toPinocchioConfiguration(model, target));
       pinocchio::updateFramePlacements(model, data);
       pinocchio::SE3 goal = data.oMf[tip_frame_id];
 
       if (solver.CartToJnt(seed, goal, result) < 0) continue;
 
       // Verify FK of result
-      pinocchio::forwardKinematics(model, data, result);
+      pinocchio::forwardKinematics(model, data, PIN_IK::toPinocchioConfiguration(model, result));
       pinocchio::updateFramePlacements(model, data);
       pinocchio::SE3 actual = data.oMf[tip_frame_id];
 

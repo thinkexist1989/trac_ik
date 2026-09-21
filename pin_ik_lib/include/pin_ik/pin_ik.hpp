@@ -86,11 +86,7 @@ public:
 
   bool setLimits(Eigen::VectorXd& lb_, Eigen::VectorXd& ub_)
   {
-    if (lb_.size() != model.nq || ub_.size() != model.nq)
-      throw std::invalid_argument("Wrong joint limit dimensions");
-    for (int i = 0; i < lb_.size(); ++i)
-      if (!std::isfinite(lb_(i)) || !std::isfinite(ub_(i)) || lb_(i) > ub_(i))
-        throw std::invalid_argument("Invalid joint limits");
+    validateLimits(model, lb_, ub_);
     lb = lb_;
     ub = ub_;
     types.clear();
@@ -108,6 +104,7 @@ public:
     return err;
   }
 
+  // Seed/output and limits use model.nv scalars; continuous joints use radians.
   int CartToJnt(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in, Eigen::VectorXd &q_out,
                 const pinocchio::Motion& bounds = pinocchio::Motion::Zero());
 

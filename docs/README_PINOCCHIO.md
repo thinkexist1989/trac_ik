@@ -1,3 +1,5 @@
+> 历史迁移记录：当前 Pinocchio 3.9.0 实现及连续关节接口见 [文档首页](README.md)。本文中的进度与版本差异描述可能已过时。
+
 # PIN-IK with Pinocchio
 
 PIN-IK (Track Inverse Kinematics) 现在使用 Pinocchio 作为其运动学后端，替代了原来的 KDL (Kinematics and Dynamics Library)。

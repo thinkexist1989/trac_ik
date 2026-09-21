@@ -168,51 +168,21 @@ NLOPT_IK::NLOPT_IK(const pinocchio::Model& _model, const Eigen::VectorXd& _q_min
                    double _maxtime, double _eps, OptType _type):
   model(_model), tip_frame_id(_tip_frame_id), maxtime(_maxtime), eps(std::abs(_eps)), TYPE(_type)
 {
-  assert(model.nq == _q_min.size());
-  assert(model.nq == _q_max.size());
+  PIN_IK::validateLimits(model, _q_min, _q_max);
+  if (tip_frame_id >= model.frames.size()) throw std::invalid_argument("Invalid tip frame");
 
   data.reset(new pinocchio::Data(model));
   reset();
 
-  if (model.nq < 2)
-  {
-    std::fprintf(stderr, "NLOpt_IK can only be run for chains of length 2 or more");
-    return;
-  }
+  opt = nlopt::opt(nlopt::LD_SLSQP, model.nv);
 
-  opt = nlopt::opt(nlopt::LD_SLSQP, model.nq);
-
-  for (int i = 0; i < model.nq; i++)
+  for (int i = 0; i < model.nv; i++)
   {
     lb.push_back(_q_min(i));
     ub.push_back(_q_max(i));
   }
 
-  // Determine joint types
-  for (pinocchio::JointIndex i = 1; i < model.joints.size(); i++)
-  {
-    const auto& joint = model.joints[i];
-    if (joint.nq() == 0) continue;
-
-    int idx = joint.idx_q();
-    if (joint.shortname() == "JointModelRX" || joint.shortname() == "JointModelRY" ||
-        joint.shortname() == "JointModelRZ" || joint.shortname() == "JointModelRUBX" ||
-        joint.shortname() == "JointModelRUBY" || joint.shortname() == "JointModelRUBZ")
-    {
-      if (_q_max(idx) >= std::numeric_limits<float>::max() &&
-          _q_min(idx) <= std::numeric_limits<float>::lowest())
-        types.push_back(PIN_IK::Continuous);
-      else
-        types.push_back(PIN_IK::RotJoint);
-    }
-    else if (joint.shortname() == "JointModelPX" || joint.shortname() == "JointModelPY" ||
-             joint.shortname() == "JointModelPZ")
-      types.push_back(PIN_IK::TransJoint);
-    else
-      types.push_back(PIN_IK::RotJoint);
-  }
-
-  assert(types.size() == lb.size());
+  types = PIN_IK::jointTypes(model);
 
   std::vector<double> tolerance(1, FLT_EPSILON);
   opt.set_xtol_abs(tolerance[0]);
@@ -262,11 +232,7 @@ void NLOPT_IK::cartSumSquaredError(const std::vector<double>& x, double error[])
   for (uint i = 0; i < x.size(); i++)
     q(i) = x[i];
 
-  // Normalize continuous joints to enforce unit circle constraint
-  // TODO: Need to identify which joints are continuous from the model
-  // For now, forward kinematics should be robust to small deviations
-
-  pinocchio::forwardKinematics(model, *data, q);
+  pinocchio::forwardKinematics(model, *data, PIN_IK::toPinocchioConfiguration(model, q));
   pinocchio::updateFramePlacements(model, *data);
   currentPose = data->oMf[tip_frame_id];
 
@@ -310,7 +276,7 @@ void NLOPT_IK::cartL2NormError(const std::vector<double>& x, double error[])
   for (uint i = 0; i < x.size(); i++)
     q(i) = x[i];
 
-  pinocchio::forwardKinematics(model, *data, q);
+  pinocchio::forwardKinematics(model, *data, PIN_IK::toPinocchioConfiguration(model, q));
   pinocchio::updateFramePlacements(model, *data);
   currentPose = data->oMf[tip_frame_id];
 
@@ -358,7 +324,7 @@ void NLOPT_IK::cartDQError(const std::vector<double>& x, double error[])
   // TODO: Need to identify which joints are continuous from the model
   // For now, forward kinematics should be robust to small deviations
 
-  pinocchio::forwardKinematics(model, *data, q);
+  pinocchio::forwardKinematics(model, *data, PIN_IK::toPinocchioConfiguration(model, q));
   pinocchio::updateFramePlacements(model, *data);
   currentPose = data->oMf[tip_frame_id];
 
@@ -419,13 +385,7 @@ int NLOPT_IK::CartToJnt(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_i
   bounds = _bounds;
   q_out = q_init;
 
-  if (model.nq < 2)
-  {
-    std::fprintf(stderr, "NLOpt_IK can only be run for chains of length 2 or more");
-    return -3;
-  }
-
-  if (q_init.size() != types.size())
+  if (q_init.size() != types.size() || !q_init.allFinite())
   {
     std::fprintf(stderr, "IK seeded with wrong number of joints.  Expected %d but got %d",
                  (int)types.size(), (int)q_init.size());
@@ -453,7 +413,7 @@ int NLOPT_IK::CartToJnt(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_i
     targetDQ = dual_quaternion::rigid_transformation(targetQuaternion, targetTranslation);
   }
 
-  std::vector<double> x(model.nq);
+  std::vector<double> x(model.nv);
 
   for (int i = 0; i < x.size(); i++)
   {

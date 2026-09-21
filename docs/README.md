@@ -1,128 +1,31 @@
 # PIN-IK 文档
 
-本目录包含 PIN-IK (Pinocchio Inverse Kinematics) 从 KDL 到 Pinocchio 4.x 迁移的详细技术文档。
+当前版本基于 **Pinocchio 3.9.0**，保留 TRAC-IK 的 Newton / NLopt 双求解器。
 
-**项目说明**: PIN-IK 是 TRAC-IK 的 Pinocchio 移植版本，完全移除了 KDL 依赖，使用更现代的 Pinocchio 库。
+## 构建与使用
 
-## 文档列表
+参见 [主 README](../README.md)。CMake 固定要求 Pinocchio 3.9.0，升级或降级依赖后请使用新的构建目录。
 
-### 迁移相关
-- **[MIGRATION_STATUS.md](MIGRATION_STATUS.md)** - 迁移进度跟踪
-- **[MIGRATION_REPORT.md](MIGRATION_REPORT.md)** - 详细技术迁移报告
-- **[FINAL_STATUS.md](FINAL_STATUS.md)** - 完整项目状态总结
+## 连续旋转关节
 
-### Pinocchio 4.x 适配
-- **[NEXT_STEPS.md](NEXT_STEPS.md)** - Pinocchio 4.x 连续关节适配指南
-- **[JACOBIAN_DETAILS.md](JACOBIAN_DETAILS.md)** - 雅可比矩阵和连续关节详细技术解释
-- **[README_PINOCCHIO.md](README_PINOCCHIO.md)** - Pinocchio 使用指南
+C++ / Python 的关节输入、输出、限位长度均为 `model.nv`，每个关节一个标量。连续旋转关节使用弧度，允许多圈角度，限位为 `(-inf, +inf)`，返回靠近 seed 的等价解。
 
-## 快速导航
+Pinocchio 3.9.0 的原生连续关节仍使用 `(cos θ, sin θ)`，即 `nq=2, nv=1`。例如六个关节中有一个 continuous 时，IK 输入长度为 6，Pinocchio 配置长度为 7。调用原生 FK 前使用 `PIN_IK::toPinocchioConfiguration(model, angles)` 转换。
 
-### 如果你想...
+求解器在标量关节空间更新角度、执行随机重启和 NLopt 优化；运动学和雅可比计算前统一转换配置，确保连续关节满足单位圆约束。支持 X/Y/Z 轴及任意旋转轴。
 
-#### 了解迁移完成度
-→ 阅读 [FINAL_STATUS.md](FINAL_STATUS.md)
+URDF 加载只保留 base 到 tip 的链，返回模型和目标位姿均以 base 为参考。有限关节采用 `<limit>`，不采用 `safety_controller` 软限位。
 
-**核心结论**: 迁移 95% 完成，核心库完全可用
+## 验证
 
-#### 理解连续关节问题
-→ 阅读 [JACOBIAN_DETAILS.md](JACOBIAN_DETAILS.md)
-
-**关键点**: 
-- 配置空间 (nq=7) vs 速度空间 (nv=6)
-- 雅可比矩阵维度不变 (6×6)
-- 必须使用 `pinocchio::integrate()` 更新配置
-
-#### 继续适配工作
-→ 阅读 [NEXT_STEPS.md](NEXT_STEPS.md)
-
-**推荐方案**: 使用 `pinocchio::integrate()` (已完成)  
-**估计时间**: 30-60 分钟（实际只用了 20 分钟）
-
-#### 学习 Pinocchio API
-→ 阅读 [README_PINOCCHIO.md](README_PINOCCHIO.md)
-
-**涵盖内容**:
-- 基本类型和概念
-- 前向运动学
-- 雅可比矩阵计算
-- URDF 加载
-
-#### 查看详细迁移过程
-→ 阅读 [MIGRATION_REPORT.md](MIGRATION_REPORT.md)
-
-**包含内容**:
-- API 映射表 (KDL → Pinocchio)
-- 修改的文件列表
-- 编译问题和解决方案
-
-## 技术要点
-
-### Pinocchio 4.x 关键差异
-
-#### 1. 连续关节表示
-```
-Pinocchio 2.x/3.x: θ (1 个变量)
-Pinocchio 4.x:     (cos θ, sin θ) (2 个变量)
+```bash
+cmake -S . -B build-3.9 -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/path/to/pinocchio-3.9.0
+cmake --build build-3.9 -j2
+ctest --test-dir build-3.9 --output-on-failure
 ```
 
-#### 2. 配置 vs 速度空间
-```
-配置空间 (q): nq=7  [x, y, z, roll, pitch, cos(yaw), sin(yaw)]
-速度空间 (v): nv=6  [ẋ, ẏ, ż, roll̇, pitcḣ, yaẇ]
-雅可比 (J):   6×6   定义在速度空间
-```
+测试覆盖五种求解模式、独立 Newton / NLopt 连续关节求解、跨 ±π 和多圈 seed、非根 base、100 个六轴目标、Python 接口、非法参数与超时。
 
-#### 3. 配置更新
-```cpp
-// ❌ 错误
-q = q + delta_q;
+## 历史文档
 
-// ✅ 正确
-pinocchio::integrate(model, q, delta_q, q);
-```
-
-## 项目状态
-
-| 模块 | 状态 | 说明 |
-|------|------|------|
-| 核心库编译 | ✅ 完成 | libpin_ik.so 成功构建 |
-| API 迁移 | ✅ 完成 | 所有 KDL 代码已移除 |
-| pinocchio::integrate() | ✅ 完成 | 配置更新正确实现 |
-| 测试套件 | ⚠️ 需调整 | FK 期望值基于简化链，实际用完整模型 |
-| Python 绑定 | ✅ 可用 | SWIG 绑定编译成功 |
-
-**总体进度: 95%**
-
-## Git 历史
-
-重要的 commits:
-- `e6962ea` - KDL 到 Pinocchio 迁移核心完成
-- `59fa577` - 添加雅可比矩阵详细解释
-- `bb77162` - 工作量重新评估（4-6h → 30-60min）
-- `d53dbfe` - 实现 pinocchio::integrate()
-
-## 相关资源
-
-### 外部链接
-- [Pinocchio 文档](https://stack-of-tasks.github.io/pinocchio/)
-- [Pinocchio GitHub](https://github.com/stack-of-tasks/pinocchio)
-- [NLopt 文档](https://nlopt.readthedocs.io/)
-- [原始 PIN-IK 论文](https://ieeexplore.ieee.org/document/7363472)
-
-### 仓库文件
-- [主 README](../README.md) - 使用说明和 API
-- [CLAUDE.md](../CLAUDE.md) - Claude Code 开发指南
-- [LICENSE.txt](../LICENSE.txt) - BSD 3-Clause 许可证
-
-## 贡献
-
-如果发现文档错误或有改进建议：
-1. 创建 Issue 描述问题
-2. 或直接提交 Pull Request
-
-## 更新日志
-
-- 2024-09-21: 初始文档创建，迁移核心完成
-- 2024-09-21: 实现 pinocchio::integrate() 支持
-- 2024-09-21: 文档整理到 docs/ 目录
+其余迁移报告记录早期迁移过程，不代表当前实现。尤其“3.x 连续关节只有一个配置分量”的历史描述不正确；当前 API 与构建方式以本页及主 README 为准。

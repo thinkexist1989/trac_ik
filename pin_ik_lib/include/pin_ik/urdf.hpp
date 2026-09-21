@@ -43,8 +43,8 @@ namespace PIN_IK {
  * @param base Base link name
  * @param tip Tip link name
  * @param model Output Pinocchio model (will contain only the chain from base to tip)
- * @param lower Output lower joint limits
- * @param upper Output upper joint limits
+ * @param lower Output scalar lower joint limits (model.nv; continuous: -infinity)
+ * @param upper Output scalar upper joint limits (model.nv; continuous: +infinity)
  * @param tip_frame_id Output frame index of the tip
  */
 void loadURDFModel(const std::string& urdf_xml,

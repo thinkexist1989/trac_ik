@@ -11,7 +11,9 @@ jobs:
       - name: Install standalone dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ pkg-config libeigen3-dev liborocos-kdl-dev libnlopt-cxx-dev liburdfdom-dev swig python3-dev
+          sudo apt-get install -y cmake g++ pkg-config libeigen3-dev libnlopt-cxx-dev liburdfdom-dev swig python3-dev python3-pip
+          python3 -m pip install "pin==3.9.0"
+          echo "CMAKE_PREFIX_PATH=$(python3 -c 'import cmeel; from pathlib import Path; print(Path(cmeel.__file__).parent.parent)')/cmeel.prefix" >> "$GITHUB_ENV"
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
       - name: Build

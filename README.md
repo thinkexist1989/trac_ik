@@ -1,13 +1,13 @@
 # PIN-IK (Pinocchio Inverse Kinematics)
 
-独立的 C++17/Python 3 逆运动学求解器，基于 Pinocchio 4.x 运动学库和 NLopt 优化器。
+独立的 C++17/Python 3 逆运动学求解器，基于 Pinocchio 3.9.0 运动学库和 NLopt 优化器。
 
 PIN-IK 是从 TRAC-IK 迁移到 Pinocchio 的版本，完全移除了 KDL 依赖，使用更现代的 Pinocchio 库。
 
 **特点**：
 - 双线程并行求解（Jacobian 迭代 + NLopt 优化）
 - 五种求解模式：Speed、Distance、Manip1、Manip2、Manip3
-- 基于 Pinocchio 4.x（支持连续关节和流形几何）
+- 基于 Pinocchio 3.9.0（支持连续关节和流形几何）
 - 完全独立，无需 ROS、catkin、ament、MoveIt 或参数服务器
 - 支持 C++ 和 Python 接口
 
@@ -36,15 +36,8 @@ sudo apt-get install build-essential cmake pkg-config
 # 核心依赖
 sudo apt-get install libeigen3-dev libnlopt-cxx-dev liburdfdom-dev
 
-# Pinocchio 4.x（需要从源码安装或使用 robotpkg）
-# 方法 1: 使用 robotpkg
-sudo sh -c "echo 'deb [arch=amd64] http://robotpkg.openrobots.org/packages/debian/pub $(lsb_release -cs) robotpkg' >> /etc/apt/sources.list.d/robotpkg.list"
-curl http://robotpkg.openrobots.org/packages/debian/robotpkg.key | sudo apt-key add -
-sudo apt-get update
-sudo apt-get install robotpkg-py3*-pinocchio
-
-# 方法 2: 从源码安装（推荐）
-git clone --recursive https://github.com/stack-of-tasks/pinocchio
+# Pinocchio 3.9.0（固定版本，避免安装到 4.x）
+git clone --recursive --branch v3.9.0 https://github.com/stack-of-tasks/pinocchio
 cd pinocchio
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/openrobots \
@@ -211,46 +204,43 @@ target_link_libraries(my_app pin_ik::pin_ik)
 - **超时**: 建议 5-10ms，根据机器人复杂度调整
 - **初始化**: 使用接近目标的 seed 可提高成功率和速度
 
-## Pinocchio 4.x 注意事项
+## Pinocchio 3.9.0 与连续关节
 
-本库使用 Pinocchio 4.x，与 2.x/3.x 相比有以下关键差异：
+CMake 要求 `pinocchio 3.9.0 EXACT`，构建目录应重新配置以清除旧版本缓存。
 
-### 连续关节表示
-- **配置空间**: 连续关节用 2 个变量表示 (cos θ, sin θ)
-- **速度空间**: 连续关节用 1 个变量表示 (角速度 θ̇)
-- **影响**: 6-DOF 机器人配置向量可能是 7 维（如果有连续关节）
+- C++ 和 Python 的 seed、解和限位均为 `model.nv` 个标量，连续关节使用弧度，可传入多圈角度。
+- 连续关节的限位为 `(-inf, +inf)`，求解结果会选择靠近 seed 的等价角度。
+- `getModel()` 返回原生 Pinocchio 模型：连续关节仍占两个配置分量 `(cos θ, sin θ)`，所以 `model.nq` 可能大于 `model.nv`。这在 3.9.0 中同样成立。
+- 直接调用 Pinocchio FK 时使用 `PIN_IK::toPinocchioConfiguration(model, angles)` 转换。不要把 IK 返回的角度向量直接当作 Pinocchio 配置。
+- 支持轴对齐及任意轴的 revolute、continuous、prismatic 关节。URDF 构造函数提取 base 到 tip 的链，位姿以 base 为参考。
+- 有限位关节使用 URDF `<limit>`；不解析 `safety_controller` 的软限位。
 
-### 配置更新
 ```cpp
-// ❌ 错误（Pinocchio 4.x）
-q_new = q + delta_q;
-
-// ✅ 正确
-pinocchio::integrate(model, q, delta_q, q_new);
+Eigen::VectorXd angles = Eigen::VectorXd::Zero(model.nv);
+Eigen::VectorXd q = PIN_IK::toPinocchioConfiguration(model, angles);
+pinocchio::forwardKinematics(model, data, q);
 ```
-
-库内部已正确处理，用户无需关心此差异。详见 `docs/JACOBIAN_DETAILS.md`。
 
 ## 文档
 
 - **CLAUDE.md**: Claude Code 开发指南
 - **docs/MIGRATION_STATUS.md**: KDL 到 Pinocchio 迁移状态
 - **docs/FINAL_STATUS.md**: 完整项目状态
-- **docs/NEXT_STEPS.md**: Pinocchio 4.x 适配指南
+- **docs/NEXT_STEPS.md**: Pinocchio 3.9.0 适配指南
 - **docs/JACOBIAN_DETAILS.md**: 雅可比矩阵和连续关节详解
 - **docs/README_PINOCCHIO.md**: Pinocchio 使用指南
 
 ## 迁移说明
 
-本项目已从 Orocos KDL 迁移到 Pinocchio 4.x：
+本项目已从 Orocos KDL 迁移到 Pinocchio 3.9.0：
 - ✅ 所有 KDL 依赖已移除
 - ✅ 核心库完全可用
 - ✅ 编译和链接成功
-- ⚠️ 测试套件需要适配完整模型 FK（不影响库功能）
+- 测试覆盖 C++、Python、连续关节及 FK 残差
 
 ## 限制
 
-- URDF 必须是串联链（从 base 到 tip）
+- base 必须是 tip 的祖先；仅提取该路径上的关节
 - 不支持 mimic、floating、planar 关节
 - 链中必须至少有一个可动关节
 - base 必须是 tip 的祖先
@@ -297,4 +287,4 @@ BSD 3-Clause License - 详见 [LICENSE.txt](LICENSE.txt)
 }
 ```
 
-PIN-IK 是 TRAC-IK 的 Pinocchio 4.x 移植版本，保持了原有的双线程求解架构。
+PIN-IK 是 TRAC-IK 的 Pinocchio 3.9.0 移植版本，保持了原有的双线程求解架构。

@@ -3,12 +3,13 @@ project(pin_ik_lib VERSION 2.2.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 find_package(Eigen3 REQUIRED)
-find_package(coal REQUIRED)  # Required by Pinocchio 4.x
-find_package(pinocchio REQUIRED)
+find_package(pinocchio 3.9.0 EXACT REQUIRED)
 find_package(NLopt REQUIRED)
 find_package(Threads REQUIRED)
 add_library(pin_ik SHARED src/pinocchio_tl.cpp src/nlopt_ik.cpp src/pin_ik.cpp src/urdf.cpp)
 add_library(pin_ik::pin_ik ALIAS pin_ik)
+# Keep non-system dependency prefixes discoverable after installation.
+set_target_properties(pin_ik PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
 target_compile_features(pin_ik PUBLIC cxx_std_17)
 target_include_directories(pin_ik PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -13,3 +13,5 @@ set(PIN_IK_PYTHON_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/python${Python3_VERSION_M
 set_target_properties(pin_ik_wrap PROPERTIES INSTALL_RPATH "$ORIGIN/../../..")
 install(TARGETS pin_ik_wrap LIBRARY DESTINATION ${PIN_IK_PYTHON_INSTALL_DIR})
 install(FILES ${CMAKE_SWIG_OUTDIR}/pin_ik_wrap.py src/pin_ik_python/__init__.py src/pin_ik_python/pin_ik.py DESTINATION ${PIN_IK_PYTHON_INSTALL_DIR})
+
+set_target_properties(pin_ik_wrap PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
