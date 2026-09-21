@@ -28,12 +28,11 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISE
 OF THE POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************************/
 
-
 #ifndef TRAC_IK_HPP
 #define TRAC_IK_HPP
 
 #include <trac_ik/nlopt_ik.hpp>
-#include <kdl/chainjnttojacsolver.hpp>
+#include <trac_ik/pinocchio_tl.hpp>
 #include <chrono>
 #include <atomic>
 #include <cstdio>
@@ -51,44 +50,45 @@ enum SolveType { Speed, Distance, Manip1, Manip2, Manip3 };
 class TRAC_IK
 {
 public:
-  TRAC_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime = 0.005, double _eps = 1e-5, SolveType _type = Speed);
+  TRAC_IK(const pinocchio::Model& _model, const Eigen::VectorXd& _q_min,
+          const Eigen::VectorXd& _q_max, pinocchio::FrameIndex _tip_frame_id,
+          double _maxtime = 0.005, double _eps = 1e-5, SolveType _type = Speed);
 
-
-  TRAC_IK(const std::string& base, const std::string& tip, const std::string& urdf_xml, double timeout = 0.005, double epsilon = 1e-5, SolveType type = Speed);
+  TRAC_IK(const std::string& base, const std::string& tip, const std::string& urdf_xml,
+          double timeout = 0.005, double epsilon = 1e-5, SolveType type = Speed);
 
   ~TRAC_IK();
 
-  bool getKDLChain(KDL::Chain& chain_)
+  bool getModel(pinocchio::Model& model_)
   {
-    chain_ = chain;
+    model_ = model;
     return initialized;
   }
 
-  bool getKDLLimits(KDL::JntArray& lb_, KDL::JntArray& ub_)
+  bool getLimits(Eigen::VectorXd& lb_, Eigen::VectorXd& ub_)
   {
     lb_ = lb;
     ub_ = ub;
     return initialized;
   }
 
-  // Requires a previous call to CartToJnt()
-  bool getSolutions(std::vector<KDL::JntArray>& solutions_)
+  bool getSolutions(std::vector<Eigen::VectorXd>& solutions_)
   {
     solutions_ = solutions;
     return initialized && !solutions.empty();
   }
 
-  bool getSolutions(std::vector<KDL::JntArray>& solutions_, std::vector<std::pair<double, uint> >& errors_)
+  bool getSolutions(std::vector<Eigen::VectorXd>& solutions_, std::vector<std::pair<double, uint> >& errors_)
   {
     errors_ = errors;
     return getSolutions(solutions_);
   }
 
-  bool setKDLLimits(KDL::JntArray& lb_, KDL::JntArray& ub_)
+  bool setLimits(Eigen::VectorXd& lb_, Eigen::VectorXd& ub_)
   {
-    if (lb_.rows() != chain.getNrOfJoints() || ub_.rows() != chain.getNrOfJoints())
+    if (lb_.size() != model.nq || ub_.size() != model.nq)
       throw std::invalid_argument("Wrong joint limit dimensions");
-    for (unsigned int i = 0; i < lb_.rows(); ++i)
+    for (int i = 0; i < lb_.size(); ++i)
       if (!std::isfinite(lb_(i)) || !std::isfinite(ub_(i)) || lb_(i) > ub_(i))
         throw std::invalid_argument("Invalid joint limits");
     lb = lb_;
@@ -98,18 +98,18 @@ public:
     return true;
   }
 
-  static double JointErr(const KDL::JntArray& arr1, const KDL::JntArray& arr2)
+  static double JointErr(const Eigen::VectorXd& arr1, const Eigen::VectorXd& arr2)
   {
     double err = 0;
-    for (uint i = 0; i < arr1.data.size(); i++)
+    for (int i = 0; i < arr1.size(); i++)
     {
       err += pow(arr1(i) - arr2(i), 2);
     }
-
     return err;
   }
 
-  int CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL::JntArray &q_out, const KDL::Twist& bounds = KDL::Twist::Zero());
+  int CartToJnt(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in, Eigen::VectorXd &q_out,
+                const pinocchio::Motion& bounds = pinocchio::Motion::Zero());
 
   inline void SetSolveType(SolveType _type)
   {
@@ -118,39 +118,40 @@ public:
 
 private:
   bool initialized;
-  KDL::Chain chain;
-  KDL::JntArray lb, ub;
-  std::unique_ptr<KDL::ChainJntToJacSolver> jacsolver;
+  pinocchio::Model model;
+  std::unique_ptr<pinocchio::Data> data;
+  pinocchio::FrameIndex tip_frame_id;
+  Eigen::VectorXd lb, ub;
   double eps;
   double maxtime;
   SolveType solvetype;
 
   std::unique_ptr<NLOPT_IK::NLOPT_IK> nl_solver;
-  std::unique_ptr<KDL::ChainIkSolverPos_TL> iksolver;
+  std::unique_ptr<ChainIkSolverPos_TL> iksolver;
 
   std::chrono::steady_clock::time_point start_time;
 
   template<typename T1, typename T2>
   bool runSolver(T1& solver, T2& other_solver,
-                 const KDL::JntArray &q_init,
-                 const KDL::Frame &p_in);
+                 const Eigen::VectorXd &q_init,
+                 const pinocchio::SE3 &p_in);
 
-  bool runKDL(const KDL::JntArray &q_init, const KDL::Frame &p_in);
-  bool runNLOPT(const KDL::JntArray &q_init, const KDL::Frame &p_in);
+  bool runPinocchioIK(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in);
+  bool runNLOPT(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in);
 
-  void normalize_seed(const KDL::JntArray& seed, KDL::JntArray& solution);
-  void normalize_limits(const KDL::JntArray& seed, KDL::JntArray& solution);
+  void normalize_seed(const Eigen::VectorXd& seed, Eigen::VectorXd& solution);
+  void normalize_limits(const Eigen::VectorXd& seed, Eigen::VectorXd& solution);
 
-  std::vector<KDL::BasicJointType> types;
+  std::vector<BasicJointType> types;
 
   std::mutex mtx_;
-  std::vector<KDL::JntArray> solutions;
+  std::vector<Eigen::VectorXd> solutions;
   std::vector<std::pair<double, uint> >  errors;
 
   std::thread task1, task2;
-  KDL::Twist bounds;
+  pinocchio::Motion bounds;
 
-  bool unique_solution(const KDL::JntArray& sol);
+  bool unique_solution(const Eigen::VectorXd& sol);
 
   inline static double fRand(double min, double max)
   {
@@ -158,39 +159,33 @@ private:
     return min + f * (max - min);
   }
 
-  /* @brief Manipulation metrics and penalties taken from "Workspace
-  Geometric Characterization and Manipulability of Industrial Robots",
-  Ming-June, Tsia, PhD Thesis, Ohio State University, 1986.
-  https://etd.ohiolink.edu/!etd.send_file?accession=osu1260297835
-  */
-  double manipPenalty(const KDL::JntArray& arr);
-  double manipValue1(const KDL::JntArray& arr);
-  double manipValue2(const KDL::JntArray& arr);
-  double manipValue3(const KDL::JntArray& arr);
+  double manipPenalty(const Eigen::VectorXd& arr);
+  double manipValue1(const Eigen::VectorXd& arr);
+  double manipValue2(const Eigen::VectorXd& arr);
+  double manipValue3(const Eigen::VectorXd& arr);
 
-  Eigen::MatrixXd computeSingularValues(const KDL::JntArray& arr);
+  Eigen::VectorXd computeSingularValues(const Eigen::VectorXd& arr);
 
-  inline bool myEqual(const KDL::JntArray& a, const KDL::JntArray& b, const double eps=1e-4)
+  inline bool myEqual(const Eigen::VectorXd& a, const Eigen::VectorXd& b, const double eps=1e-4)
   {
-    return (a.data - b.data).isZero(eps);
+    return (a - b).isZero(eps);
   }
 
   void initialize();
 
   void resetSolvers()
   {
-    nl_solver.reset(new NLOPT_IK::NLOPT_IK(chain, lb, ub, maxtime, eps, NLOPT_IK::SumSq));
-    iksolver.reset(new KDL::ChainIkSolverPos_TL(chain, lb, ub, maxtime, eps, true, true));
+    nl_solver.reset(new NLOPT_IK::NLOPT_IK(model, lb, ub, tip_frame_id, maxtime, eps, NLOPT_IK::SumSq));
+    iksolver.reset(new ChainIkSolverPos_TL(model, lb, ub, tip_frame_id, maxtime, eps, true, true));
   }
-
 };
 
-inline bool TRAC_IK::runKDL(const KDL::JntArray &q_init, const KDL::Frame &p_in)
+inline bool TRAC_IK::runPinocchioIK(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in)
 {
   return runSolver(*iksolver.get(), *nl_solver.get(), q_init, p_in);
 }
 
-inline bool TRAC_IK::runNLOPT(const KDL::JntArray &q_init, const KDL::Frame &p_in)
+inline bool TRAC_IK::runNLOPT(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in)
 {
   return runSolver(*nl_solver.get(), *iksolver.get(), q_init, p_in);
 }

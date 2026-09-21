@@ -28,33 +28,56 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISE
 OF THE POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************************/
 
-#ifndef TRAC_IK_URDF_HPP
-#define TRAC_IK_URDF_HPP
+#ifndef PINOCCHIO_TYPES_HPP
+#define PINOCCHIO_TYPES_HPP
 
-#include <trac_ik/pinocchio_types.hpp>
-#include <string>
+#include <pinocchio/multibody.hpp>
+#include <pinocchio/spatial.hpp>
+#include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/algorithm/frames.hpp>
+#include <pinocchio/algorithm/jacobian.hpp>
+#include <pinocchio/parsers/urdf.hpp>
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 
 namespace TRAC_IK {
 
-/**
- * @brief Load a Pinocchio model from URDF string for a kinematic chain
- *
- * @param urdf_xml URDF XML string
- * @param base Base link name
- * @param tip Tip link name
- * @param model Output Pinocchio model (will contain only the chain from base to tip)
- * @param lower Output lower joint limits
- * @param upper Output upper joint limits
- * @param tip_frame_id Output frame index of the tip
- */
-void loadURDFModel(const std::string& urdf_xml,
-                   const std::string& base,
-                   const std::string& tip,
-                   Model& model,
-                   Eigen::VectorXd& lower,
-                   Eigen::VectorXd& upper,
-                   FrameIndex& tip_frame_id);
+// Joint type enumeration for limit handling
+enum BasicJointType {
+  RotJoint = 0,
+  TransJoint = 1,
+  Continuous = 2
+};
+
+// Type aliases for Pinocchio 4.x
+// Default instantiation: double scalar, column-major (Options=0), default joint collection
+using Model = pinocchio::ModelTpl<double, 0, pinocchio::JointCollectionDefaultTpl>;
+using Data = pinocchio::DataTpl<double, 0, pinocchio::JointCollectionDefaultTpl>;
+using SE3 = pinocchio::SE3Tpl<double, 0>;
+using Motion = pinocchio::MotionTpl<double, 0>;
+using Frame = pinocchio::FrameTpl<double, 0>;
+using FrameIndex = pinocchio::FrameIndex;
+using JointIndex = pinocchio::JointIndex;
+
+// Helper function to compute pose difference for IK
+inline Motion diffRelative(const SE3& current, const SE3& target) {
+  // Compute the relative transformation error
+  SE3 error = target.actInv(current);
+  // Convert to motion (log map)
+  Motion motion_error = pinocchio::log6(error);
+  return motion_error;
+}
+
+// Helper function to check if two SE3 transforms are approximately equal
+inline bool isApprox(const SE3& a, const SE3& b, double prec = 1e-6) {
+  return a.isApprox(b, prec);
+}
+
+// Helper function to check if a Motion is approximately zero
+inline bool isMotionZero(const Motion& m, double eps = 1e-6) {
+  return m.linear().norm() < eps && m.angular().norm() < eps;
+}
 
 } // namespace TRAC_IK
 
-#endif // TRAC_IK_URDF_HPP
+#endif // PINOCCHIO_TYPES_HPP

@@ -2,10 +2,12 @@
  %module trac_ik_wrap
 
 // Author: Sammy Pfeiffer <Sammy.Pfeiffer at student.uts.edu.au>
+// Updated to use Pinocchio instead of KDL
 
  %{
  /* Includes the header in the wrapper code */
  #include <trac_ik/trac_ik.hpp>
+ #include <pinocchio/spatial/se3.hpp>
  #include <limits>
  %}
 
@@ -67,14 +69,14 @@ public:
 
 
     // original call:
-    // int CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL::JntArray &q_out, const KDL::Twist& bounds=KDL::Twist::Zero());
-        
+    // int CartToJnt(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in, Eigen::VectorXd &q_out, const pinocchio::Motion& bounds=pinocchio::Motion::Zero());
+
     // note that as a comment here https://bitbucket.org/traclabs/trac_ik/issues/18/possible-bug-with-quaternions-in-carttojnt
     // explains, the pose is in reference to the base
-    // of the chain... 
+    // of the chain...
     std::vector<double> CartToJnt(const std::vector<double> q_init,
-     const double x, const double y, const double z, 
-     const double rx, const double ry, const double rz, const double rw, 
+     const double x, const double y, const double z,
+     const double rx, const double ry, const double rz, const double rw,
      // bounds x y z
      const double boundx=0.0, const double boundy=0.0, const double boundz=0.0,
      // bounds on rotation x y z
@@ -83,23 +85,28 @@ public:
 
       const double norm = std::sqrt(rx*rx + ry*ry + rz*rz + rw*rw);
       if (!std::isfinite(norm) || norm < 1e-12) throw std::invalid_argument("Invalid quaternion");
-      KDL::Frame frame(KDL::Rotation::Quaternion(rx/norm, ry/norm, rz/norm, rw/norm), KDL::Vector(x,y,z));
-      KDL::Chain chain;
-      $self->getKDLChain(chain);
-      if (q_init.size() != chain.getNrOfJoints()) throw std::invalid_argument("Wrong seed size");
 
-      KDL::JntArray in(q_init.size()), out(q_init.size());
+      // Create SE3 transform from position and quaternion
+      Eigen::Quaterniond quat(rw/norm, rx/norm, ry/norm, rz/norm);
+      Eigen::Vector3d pos(x, y, z);
+      pinocchio::SE3 frame(quat.toRotationMatrix(), pos);
+
+      pinocchio::Model model;
+      $self->getModel(model);
+      if (q_init.size() != model.nq) throw std::invalid_argument("Wrong seed size");
+
+      Eigen::VectorXd in(q_init.size()), out(q_init.size());
 
       for (uint z=0; z < q_init.size(); z++)
           in(z) = q_init[z];
 
-      KDL::Twist bounds = KDL::Twist::Zero();
-      bounds.vel.x(boundx);
-      bounds.vel.y(boundy);
-      bounds.vel.z(boundz);
-      bounds.rot.x(boundrx);
-      bounds.rot.y(boundry);
-      bounds.rot.z(boundrz);
+      pinocchio::Motion bounds = pinocchio::Motion::Zero();
+      bounds.linear()[0] = boundx;
+      bounds.linear()[1] = boundy;
+      bounds.linear()[2] = boundz;
+      bounds.angular()[0] = boundrx;
+      bounds.angular()[1] = boundry;
+      bounds.angular()[2] = boundrz;
 
       int rc = $self->CartToJnt(in, frame, out, bounds);
       std::vector<double> vout;
@@ -116,67 +123,69 @@ public:
     // Convenience method to check that calls to IK have the correct
     // number of qinit elements
     int getNrOfJointsInChain(){
-      KDL::Chain chain;
-      $self->getKDLChain(chain);
-      return (int) chain.getNrOfJoints();
+      pinocchio::Model model;
+      $self->getModel(model);
+      return (int) model.nq;
     }
 
     // Convenience method to get the list of joint names as used internally
     std::vector<std::string> getJointNamesInChain(const std::string& urdf_string){
-      KDL::Chain chain;
-      $self->getKDLChain(chain);
-      std::vector<KDL::Segment> chain_segs = chain.segments;
+      pinocchio::Model model;
+      $self->getModel(model);
 
       std::vector<std::string> joint_names_;
-      std::vector<std::string> link_names_;
-      for (const auto& segment : chain_segs)
-        if (segment.getJoint().getType() != KDL::Joint::Fixed)
-          joint_names_.push_back(segment.getJoint().getName());
+      for (pinocchio::JointIndex i = 1; i < model.joints.size(); ++i) {
+        if (model.joints[i].nq() > 0) {
+          joint_names_.push_back(model.names[i]);
+        }
+      }
       return joint_names_;
     }
 
 
     // Convenience method to get the list of link names as used internally
     std::vector<std::string> getLinkNamesInChain(){
-      KDL::Chain chain;
-      $self->getKDLChain(chain);
-      std::vector<KDL::Segment> chain_segs = chain.segments;
+      pinocchio::Model model;
+      $self->getModel(model);
+
       std::vector<std::string> link_names_;
-      for(unsigned int i = 0; i < chain_segs.size(); ++i) {
-        link_names_.push_back(chain_segs[i].getName());
+      for (pinocchio::FrameIndex i = 0; i < model.frames.size(); ++i) {
+        if (model.frames[i].type == pinocchio::BODY) {
+          link_names_.push_back(model.frames[i].name);
+        }
       }
       return link_names_;
     }
 
 
-    // Get KDL limits
+    // Get limits
     std::vector<double> getLowerBoundLimits(){
-      KDL::JntArray lb_;
-      KDL::JntArray ub_;
+      Eigen::VectorXd lb_;
+      Eigen::VectorXd ub_;
       std::vector<double> lb;
-      $self->getKDLLimits(lb_, ub_);
-      for(unsigned int i=0; i < lb_.rows(); i++){
+      $self->getLimits(lb_, ub_);
+      for(int i=0; i < lb_.size(); i++){
         lb.push_back(lb_(i));
       }
       return lb;
     }
 
     std::vector<double> getUpperBoundLimits(){
-      KDL::JntArray lb_;
-      KDL::JntArray ub_;
+      Eigen::VectorXd lb_;
+      Eigen::VectorXd ub_;
       std::vector<double> ub;
-      $self->getKDLLimits(lb_, ub_);
-      for(unsigned int i=0; i < ub_.rows(); i++){
+      $self->getLimits(lb_, ub_);
+      for(int i=0; i < ub_.size(); i++){
         ub.push_back(ub_(i));
       }
       return ub;
     }
 
 
-    // Set KDL limits, Python takes care of checking number of limits
+    // Set limits, Python takes care of checking number of limits
     void setKDLLimits(const std::vector<double> lb, const std::vector<double> ub) {
-      KDL::JntArray lb_;
-      KDL::JntArray ub_;
+      Eigen::VectorXd lb_;
+      Eigen::VectorXd ub_;
       lb_.resize(lb.size());
       for(unsigned int i=0; i < lb.size(); i++){
         lb_(i) = lb[i];
@@ -185,8 +194,7 @@ public:
       for(unsigned int i=0; i < ub.size(); i++){
         ub_(i) = ub[i];
       }
-      $self->setKDLLimits(lb_, ub_);
+      $self->setLimits(lb_, ub_);
     }
 
 };
-

@@ -28,37 +28,38 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISE
 OF THE POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************************/
 
+#ifndef PINOCCHIO_TL_HPP
+#define PINOCCHIO_TL_HPP
 
-#ifndef KDLCHAINIKSOLVERPOS_TL_HPP
-#define KDLCHAINIKSOLVERPOS_TL_HPP
-
-#include <kdl/chainfksolverpos_recursive.hpp>
-#include <kdl/chainiksolvervel_pinv.hpp>
+#include <trac_ik/pinocchio_types.hpp>
 #include <chrono>
 #include <atomic>
 #include <cstdio>
 #include <iostream>
+#include <memory>
 
 namespace TRAC_IK
 {
 class TRAC_IK;
 }
 
-namespace KDL
+namespace TRAC_IK
 {
-
-enum BasicJointType { RotJoint, TransJoint, Continuous };
 
 class ChainIkSolverPos_TL
 {
-  friend class TRAC_IK::TRAC_IK;
+  friend class TRAC_IK;
 
 public:
-  ChainIkSolverPos_TL(const Chain& chain, const JntArray& q_min, const JntArray& q_max, double maxtime = 0.005, double eps = 1e-3, bool random_restart = false, bool try_jl_wrap = false);
+  ChainIkSolverPos_TL(const pinocchio::Model& model, const Eigen::VectorXd& q_min,
+                      const Eigen::VectorXd& q_max, pinocchio::FrameIndex tip_frame_id,
+                      double maxtime = 0.005, double eps = 1e-3,
+                      bool random_restart = false, bool try_jl_wrap = false);
 
   ~ChainIkSolverPos_TL();
 
-  int CartToJnt(const KDL::JntArray& q_init, const KDL::Frame& p_in, KDL::JntArray& q_out, const KDL::Twist bounds = KDL::Twist::Zero());
+  int CartToJnt(const Eigen::VectorXd& q_init, const pinocchio::SE3& p_in,
+                Eigen::VectorXd& q_out, const pinocchio::Motion bounds = pinocchio::Motion::Zero());
 
   inline void setMaxtime(double t)
   {
@@ -66,23 +67,22 @@ public:
   }
 
 private:
-  const Chain chain;
-  JntArray q_min;
-  JntArray q_max;
+  const pinocchio::Model model;
+  std::unique_ptr<pinocchio::Data> data;
+  pinocchio::FrameIndex tip_frame_id;
+  Eigen::VectorXd q_min;
+  Eigen::VectorXd q_max;
 
-  KDL::Twist bounds;
+  pinocchio::Motion bounds;
 
-  KDL::ChainIkSolverVel_pinv vik_solver;
-  KDL::ChainFkSolverPos_recursive fksolver;
-  JntArray delta_q;
+  Eigen::VectorXd delta_q;
   double maxtime;
-
   double eps;
 
   bool rr;
   bool wrap;
 
-  std::vector<KDL::BasicJointType> types;
+  std::vector<BasicJointType> types;
 
   inline void abort()
   {
@@ -96,34 +96,15 @@ private:
 
   std::atomic<bool> aborted{false};
 
-  Frame f;
-  Twist delta_twist;
+  pinocchio::SE3 f;
+  pinocchio::Motion delta_twist;
 
   inline static double fRand(double min, double max)
   {
     double f = (double)rand() / RAND_MAX;
     return min + f * (max - min);
   }
-  
-
 };
-
-/**
- * determines the rotation axis necessary to rotate from frame b1 to the
- * orientation of frame b2 and the vector necessary to translate the origin
- * of b1 to the origin of b2, and stores the result in a Twist
- * datastructure.  The result is w.r.t. frame b1.
- * \param F_a_b1 frame b1 expressed with respect to some frame a.
- * \param F_a_b2 frame b2 expressed with respect to some frame a.
- * \warning The result is not a real Twist!
- * \warning In contrast to standard KDL diff methods, the result of
- * diffRelative is w.r.t. frame b1 instead of frame a.
- */
-IMETHOD Twist diffRelative(const Frame & F_a_b1, const Frame & F_a_b2, double dt = 1)
-{
-  return Twist(F_a_b1.M.Inverse() * diff(F_a_b1.p, F_a_b2.p, dt),
-               F_a_b1.M.Inverse() * diff(F_a_b1.M, F_a_b2.M, dt));
-}
 
 }
 

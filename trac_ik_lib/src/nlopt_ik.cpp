@@ -33,8 +33,8 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <trac_ik/dual_quaternion.h>
 #include <cmath>
 #include <cfloat>
-
-
+#include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/algorithm/frames.hpp>
 
 namespace NLOPT_IK
 {
@@ -43,22 +43,12 @@ dual_quaternion targetDQ;
 
 double minfunc(const std::vector<double>& x, std::vector<double>& grad, void* data)
 {
-  // Auxilory function to minimize (Sum of Squared joint angle error
-  // from the requested configuration).  Because we wanted a Class
-  // without static members, but NLOpt library does not support
-  // passing methods of Classes, we use these auxilary functions.
-
   NLOPT_IK *c = (NLOPT_IK *) data;
-
   return c->minJoints(x, grad);
 }
 
 double minfuncDQ(const std::vector<double>& x, std::vector<double>& grad, void* data)
 {
-  // Auxilory function to minimize (Sum of Squared joint angle error
-  // from the requested configuration).  Because we wanted a Class
-  // without static members, but NLOpt library does not support
-  // passing methods of Classes, we use these auxilary functions.
   NLOPT_IK *c = (NLOPT_IK *) data;
 
   std::vector<double> vals(x);
@@ -85,14 +75,8 @@ double minfuncDQ(const std::vector<double>& x, std::vector<double>& grad, void* 
   return result[0];
 }
 
-
 double minfuncSumSquared(const std::vector<double>& x, std::vector<double>& grad, void* data)
 {
-  // Auxilory function to minimize (Sum of Squared joint angle error
-  // from the requested configuration).  Because we wanted a Class
-  // without static members, but NLOpt library does not support
-  // passing methods of Classes, we use these auxilary functions.
-
   NLOPT_IK *c = (NLOPT_IK *) data;
 
   std::vector<double> vals(x);
@@ -119,14 +103,8 @@ double minfuncSumSquared(const std::vector<double>& x, std::vector<double>& grad
   return result[0];
 }
 
-
 double minfuncL2(const std::vector<double>& x, std::vector<double>& grad, void* data)
 {
-  // Auxilory function to minimize (Sum of Squared joint angle error
-  // from the requested configuration).  Because we wanted a Class
-  // without static members, but NLOpt library does not support
-  // passing methods of Classes, we use these auxilary functions.
-
   NLOPT_IK *c = (NLOPT_IK *) data;
 
   std::vector<double> vals(x);
@@ -153,14 +131,8 @@ double minfuncL2(const std::vector<double>& x, std::vector<double>& grad, void* 
   return result[0];
 }
 
-
-
 void constrainfuncm(uint m, double* result, uint n, const double* x, double* grad, void* data)
 {
-  //Equality constraint auxilary function for Euclidean distance .
-  //This also uses a small walk to approximate the gradient of the
-  //constraint function at the current joint angles.
-
   NLOPT_IK *c = (NLOPT_IK *) data;
 
   std::vector<double> vals(n);
@@ -191,50 +163,59 @@ void constrainfuncm(uint m, double* result, uint n, const double* x, double* gra
   }
 }
 
-NLOPT_IK::NLOPT_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime, double _eps, OptType _type):
-  chain(_chain), fksolver(chain), maxtime(_maxtime), eps(std::abs(_eps)), TYPE(_type)
+NLOPT_IK::NLOPT_IK(const pinocchio::Model& _model, const Eigen::VectorXd& _q_min,
+                   const Eigen::VectorXd& _q_max, pinocchio::FrameIndex _tip_frame_id,
+                   double _maxtime, double _eps, OptType _type):
+  model(_model), tip_frame_id(_tip_frame_id), maxtime(_maxtime), eps(std::abs(_eps)), TYPE(_type)
 {
-  assert(chain.getNrOfJoints() == _q_min.data.size());
-  assert(chain.getNrOfJoints() == _q_max.data.size());
+  assert(model.nq == _q_min.size());
+  assert(model.nq == _q_max.size());
 
-  //Constructor for an IK Class.  Takes in a Chain to operate on,
-  //the min and max joint limits, an (optional) maximum number of
-  //iterations, and an (optional) desired error.
+  data.reset(new pinocchio::Data(model));
   reset();
 
-  if (chain.getNrOfJoints() < 2)
+  if (model.nq < 2)
   {
     std::fprintf(stderr, "NLOpt_IK can only be run for chains of length 2 or more");
     return;
   }
-  opt = nlopt::opt(nlopt::LD_SLSQP, _chain.getNrOfJoints());
 
-  for (uint i = 0; i < chain.getNrOfJoints(); i++)
+  opt = nlopt::opt(nlopt::LD_SLSQP, model.nq);
+
+  for (int i = 0; i < model.nq; i++)
   {
     lb.push_back(_q_min(i));
     ub.push_back(_q_max(i));
   }
 
-  for (uint i = 0; i < chain.segments.size(); i++)
+  // Determine joint types
+  for (pinocchio::JointIndex i = 1; i < model.joints.size(); i++)
   {
-    std::string type = chain.segments[i].getJoint().getTypeName();
-    if (type.find("Rot") != std::string::npos)
+    const auto& joint = model.joints[i];
+    if (joint.nq() == 0) continue;
+
+    int idx = joint.idx_q();
+    if (joint.shortname() == "JointModelRX" || joint.shortname() == "JointModelRY" ||
+        joint.shortname() == "JointModelRZ" || joint.shortname() == "JointModelRUBX" ||
+        joint.shortname() == "JointModelRUBY" || joint.shortname() == "JointModelRUBZ")
     {
-      if (_q_max(types.size()) >= std::numeric_limits<float>::max() &&
-          _q_min(types.size()) <= std::numeric_limits<float>::lowest())
-        types.push_back(KDL::BasicJointType::Continuous);
+      if (_q_max(idx) >= std::numeric_limits<float>::max() &&
+          _q_min(idx) <= std::numeric_limits<float>::lowest())
+        types.push_back(TRAC_IK::Continuous);
       else
-        types.push_back(KDL::BasicJointType::RotJoint);
+        types.push_back(TRAC_IK::RotJoint);
     }
-    else if (type.find("Trans") != std::string::npos)
-      types.push_back(KDL::BasicJointType::TransJoint);
+    else if (joint.shortname() == "JointModelPX" || joint.shortname() == "JointModelPY" ||
+             joint.shortname() == "JointModelPZ")
+      types.push_back(TRAC_IK::TransJoint);
+    else
+      types.push_back(TRAC_IK::RotJoint);
   }
 
   assert(types.size() == lb.size());
 
   std::vector<double> tolerance(1, FLT_EPSILON);
   opt.set_xtol_abs(tolerance[0]);
-
 
   switch (TYPE)
   {
@@ -254,13 +235,8 @@ NLOPT_IK::NLOPT_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const 
   }
 }
 
-
 double NLOPT_IK::minJoints(const std::vector<double>& x, std::vector<double>& grad)
 {
-  // Actual function to compute the error between the current joint
-  // configuration and the desired.  The SSE is easy to provide a
-  // closed form gradient for.
-
   bool gradient = !grad.empty();
 
   double err = 0;
@@ -272,35 +248,25 @@ double NLOPT_IK::minJoints(const std::vector<double>& x, std::vector<double>& gr
   }
 
   return err;
-
 }
-
 
 void NLOPT_IK::cartSumSquaredError(const std::vector<double>& x, double error[])
 {
-  // Actual function to compute Euclidean distance error.  This uses
-  // the KDL Forward Kinematics solver to compute the Cartesian pose
-  // of the current joint configuration and compares that to the
-  // desired Cartesian pose for the IK solve.
-
   if (aborted || progress != -3)
   {
     opt.force_stop();
     return;
   }
 
-
-  KDL::JntArray q(x.size());
-
+  Eigen::VectorXd q(x.size());
   for (uint i = 0; i < x.size(); i++)
     q(i) = x[i];
 
-  int rc = fksolver.JntToCart(q, currentPose);
+  pinocchio::forwardKinematics(model, *data, q);
+  pinocchio::updateFramePlacements(model, *data);
+  currentPose = data->oMf[tip_frame_id];
 
-  if (rc < 0)
-    std::cerr << "KDL FKSolver is failing: " << q.data << std::endl;
-
-  if (std::isnan(currentPose.p.x()))
+  if (std::isnan(currentPose.translation().x()))
   {
     std::fprintf(stderr, "NaNs from NLOpt!!");
     error[0] = std::numeric_limits<float>::max();
@@ -308,51 +274,43 @@ void NLOPT_IK::cartSumSquaredError(const std::vector<double>& x, double error[])
     return;
   }
 
-  KDL::Twist delta_twist = KDL::diffRelative(targetPose, currentPose);
+  pinocchio::Motion delta_twist = TRAC_IK::diffRelative(targetPose, currentPose);
 
-  for (int i = 0; i < 6; i++)
+  for (int i = 0; i < 3; i++)
   {
-    if (std::abs(delta_twist[i]) <= std::abs(bounds[i]))
-      delta_twist[i] = 0.0;
+    if (std::abs(delta_twist.linear()[i]) <= std::abs(bounds.linear()[i]))
+      delta_twist.linear()[i] = 0.0;
+    if (std::abs(delta_twist.angular()[i]) <= std::abs(bounds.angular()[i]))
+      delta_twist.angular()[i] = 0.0;
   }
 
-  error[0] = KDL::dot(delta_twist.vel, delta_twist.vel) + KDL::dot(delta_twist.rot, delta_twist.rot);
+  error[0] = delta_twist.linear().squaredNorm() + delta_twist.angular().squaredNorm();
 
-  if (KDL::Equal(delta_twist, KDL::Twist::Zero(), eps))
+  if (TRAC_IK::isMotionZero(delta_twist, eps))
   {
     progress = 1;
     best_x = x;
     return;
   }
 }
-
-
 
 void NLOPT_IK::cartL2NormError(const std::vector<double>& x, double error[])
 {
-  // Actual function to compute Euclidean distance error.  This uses
-  // the KDL Forward Kinematics solver to compute the Cartesian pose
-  // of the current joint configuration and compares that to the
-  // desired Cartesian pose for the IK solve.
-
   if (aborted || progress != -3)
   {
     opt.force_stop();
     return;
   }
 
-  KDL::JntArray q(x.size());
-
+  Eigen::VectorXd q(x.size());
   for (uint i = 0; i < x.size(); i++)
     q(i) = x[i];
 
-  int rc = fksolver.JntToCart(q, currentPose);
+  pinocchio::forwardKinematics(model, *data, q);
+  pinocchio::updateFramePlacements(model, *data);
+  currentPose = data->oMf[tip_frame_id];
 
-  if (rc < 0)
-    std::cerr << "KDL FKSolver is failing: " << q.data << std::endl;
-
-
-  if (std::isnan(currentPose.p.x()))
+  if (std::isnan(currentPose.translation().x()))
   {
     std::fprintf(stderr, "NaNs from NLOpt!!");
     error[0] = std::numeric_limits<float>::max();
@@ -360,17 +318,19 @@ void NLOPT_IK::cartL2NormError(const std::vector<double>& x, double error[])
     return;
   }
 
-  KDL::Twist delta_twist = KDL::diffRelative(targetPose, currentPose);
+  pinocchio::Motion delta_twist = TRAC_IK::diffRelative(targetPose, currentPose);
 
-  for (int i = 0; i < 6; i++)
+  for (int i = 0; i < 3; i++)
   {
-    if (std::abs(delta_twist[i]) <= std::abs(bounds[i]))
-      delta_twist[i] = 0.0;
+    if (std::abs(delta_twist.linear()[i]) <= std::abs(bounds.linear()[i]))
+      delta_twist.linear()[i] = 0.0;
+    if (std::abs(delta_twist.angular()[i]) <= std::abs(bounds.angular()[i]))
+      delta_twist.angular()[i] = 0.0;
   }
 
-  error[0] = std::sqrt(KDL::dot(delta_twist.vel, delta_twist.vel) + KDL::dot(delta_twist.rot, delta_twist.rot));
+  error[0] = std::sqrt(delta_twist.linear().squaredNorm() + delta_twist.angular().squaredNorm());
 
-  if (KDL::Equal(delta_twist, KDL::Twist::Zero(), eps))
+  if (TRAC_IK::isMotionZero(delta_twist, eps))
   {
     progress = 1;
     best_x = x;
@@ -378,34 +338,23 @@ void NLOPT_IK::cartL2NormError(const std::vector<double>& x, double error[])
   }
 }
 
-
-
-
 void NLOPT_IK::cartDQError(const std::vector<double>& x, double error[])
 {
-  // Actual function to compute Euclidean distance error.  This uses
-  // the KDL Forward Kinematics solver to compute the Cartesian pose
-  // of the current joint configuration and compares that to the
-  // desired Cartesian pose for the IK solve.
-
   if (aborted || progress != -3)
   {
     opt.force_stop();
     return;
   }
 
-  KDL::JntArray q(x.size());
-
+  Eigen::VectorXd q(x.size());
   for (uint i = 0; i < x.size(); i++)
     q(i) = x[i];
 
-  int rc = fksolver.JntToCart(q, currentPose);
+  pinocchio::forwardKinematics(model, *data, q);
+  pinocchio::updateFramePlacements(model, *data);
+  currentPose = data->oMf[tip_frame_id];
 
-  if (rc < 0)
-    std::cerr << "KDL FKSolver is failing: " << q.data << std::endl;
-
-
-  if (std::isnan(currentPose.p.x()))
+  if (std::isnan(currentPose.translation().x()))
   {
     std::fprintf(stderr, "NaNs from NLOpt!!");
     error[0] = std::numeric_limits<float>::max();
@@ -413,25 +362,39 @@ void NLOPT_IK::cartDQError(const std::vector<double>& x, double error[])
     return;
   }
 
-  KDL::Twist delta_twist = KDL::diffRelative(targetPose, currentPose);
+  pinocchio::Motion delta_twist = TRAC_IK::diffRelative(targetPose, currentPose);
 
-  for (int i = 0; i < 6; i++)
+  for (int i = 0; i < 3; i++)
   {
-    if (std::abs(delta_twist[i]) <= std::abs(bounds[i]))
-      delta_twist[i] = 0.0;
+    if (std::abs(delta_twist.linear()[i]) <= std::abs(bounds.linear()[i]))
+      delta_twist.linear()[i] = 0.0;
+    if (std::abs(delta_twist.angular()[i]) <= std::abs(bounds.angular()[i]))
+      delta_twist.angular()[i] = 0.0;
   }
 
-  math3d::matrix3x3<double> currentRotationMatrix(currentPose.M.data);
-  math3d::quaternion<double> currentQuaternion = math3d::rot_matrix_to_quaternion<double>(currentRotationMatrix);
-  math3d::point3d currentTranslation(currentPose.p.data);
-  dual_quaternion currentDQ = dual_quaternion::rigid_transformation(currentQuaternion, currentTranslation);
+  // Convert SE3 to dual quaternion
+  Eigen::Matrix3d R = currentPose.rotation();
+  Eigen::Quaterniond currentQuaternion(R);
+  Eigen::Vector3d currentTranslation = currentPose.translation();
+
+  math3d::matrix3x3<double> currentRotationMatrix;
+  for(int i = 0; i < 3; i++)
+    for(int j = 0; j < 3; j++)
+      currentRotationMatrix(i, j) = R(i,j);
+
+  math3d::quaternion<double> currentQuat = math3d::rot_matrix_to_quaternion<double>(currentRotationMatrix);
+  math3d::point3d currentTrans;
+  currentTrans.x = currentTranslation.x();
+  currentTrans.y = currentTranslation.y();
+  currentTrans.z = currentTranslation.z();
+
+  dual_quaternion currentDQ = dual_quaternion::rigid_transformation(currentQuat, currentTrans);
 
   dual_quaternion errorDQ = (currentDQ * !targetDQ).normalize();
   errorDQ.log();
   error[0] = 4.0f * dot(errorDQ, errorDQ);
 
-
-  if (KDL::Equal(delta_twist, KDL::Twist::Zero(), eps))
+  if (TRAC_IK::isMotionZero(delta_twist, eps))
   {
     progress = 1;
     best_x = x;
@@ -439,91 +402,74 @@ void NLOPT_IK::cartDQError(const std::vector<double>& x, double error[])
   }
 }
 
-
-int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL::JntArray &q_out, const KDL::Twist _bounds, const KDL::JntArray& q_desired)
+int NLOPT_IK::CartToJnt(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in,
+                        Eigen::VectorXd &q_out, const pinocchio::Motion _bounds,
+                        const Eigen::VectorXd& q_desired)
 {
-  // User command to start an IK solve.  Takes in a seed
-  // configuration, a Cartesian pose, and (optional) a desired
-  // configuration.  If the desired is not provided, the seed is
-  // used.  Outputs the joint configuration found that solves the
-  // IK.
-
-  // Returns -3 if a configuration could not be found within the eps
-  // set up in the constructor.
-
   auto start_time = std::chrono::steady_clock::now();
 
   bounds = _bounds;
   q_out = q_init;
-  
-  if (chain.getNrOfJoints() < 2)
+
+  if (model.nq < 2)
   {
     std::fprintf(stderr, "NLOpt_IK can only be run for chains of length 2 or more");
     return -3;
   }
 
-  if (q_init.data.size() != types.size())
+  if (q_init.size() != types.size())
   {
-    std::fprintf(stderr, "IK seeded with wrong number of joints.  Expected %d but got %d", (int)types.size(), (int)q_init.data.size());
+    std::fprintf(stderr, "IK seeded with wrong number of joints.  Expected %d but got %d",
+                 (int)types.size(), (int)q_init.size());
     return -3;
   }
 
   opt.set_maxtime(maxtime);
 
-
-  double minf; /* the minimum objective value, upon return */
-
+  double minf;
   targetPose = p_in;
 
   if (TYPE == 1)   // DQ
   {
-    math3d::matrix3x3<double> targetRotationMatrix(targetPose.M.data);
+    Eigen::Matrix3d R = targetPose.rotation();
+    math3d::matrix3x3<double> targetRotationMatrix;
+    for(int i = 0; i < 3; i++)
+      for(int j = 0; j < 3; j++)
+        targetRotationMatrix(i, j) = R(i,j);
+
     math3d::quaternion<double> targetQuaternion = math3d::rot_matrix_to_quaternion<double>(targetRotationMatrix);
-    math3d::point3d targetTranslation(targetPose.p.data);
+    math3d::point3d targetTranslation;
+    targetTranslation.x = targetPose.translation().x();
+    targetTranslation.y = targetPose.translation().y();
+    targetTranslation.z = targetPose.translation().z();
     targetDQ = dual_quaternion::rigid_transformation(targetQuaternion, targetTranslation);
   }
-  // else if (TYPE == 1)
-  // {
-  //   z_target = targetPose*z_up;
-  //   x_target = targetPose*x_out;
-  //   y_target = targetPose*y_out;
-  // }
 
+  std::vector<double> x(model.nq);
 
-  //    fksolver.JntToCart(q_init,currentPose);
-
-  std::vector<double> x(chain.getNrOfJoints());
-
-  for (uint i = 0; i < x.size(); i++)
+  for (int i = 0; i < x.size(); i++)
   {
     x[i] = q_init(i);
 
-    if (types[i] == KDL::BasicJointType::Continuous)
+    if (types[i] == TRAC_IK::Continuous)
       continue;
 
-    if (types[i] == KDL::BasicJointType::TransJoint)
+    if (types[i] == TRAC_IK::TransJoint)
     {
       x[i] = std::min(x[i], ub[i]);
       x[i] = std::max(x[i], lb[i]);
     }
     else
     {
-
-      // Below is to handle bad seeds outside of limits
-
       if (x[i] > ub[i])
       {
-        //Find actual angle offset
         double diffangle = fmod(x[i] - ub[i], 2 * M_PI);
-        // Add that to upper bound and go back a full rotation
         x[i] = ub[i] + diffangle - 2 * M_PI;
       }
 
       if (x[i] < lb[i])
       {
-        //Find actual angle offset
         double diffangle = fmod(lb[i] - x[i], 2 * M_PI);
-        // Subtract that from lower bound and go forward a full rotation
         x[i] = lb[i] - diffangle + 2 * M_PI;
       }
 
@@ -538,9 +484,9 @@ int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL
   std::vector<double> artificial_lower_limits(lb.size());
 
   for (uint i = 0; i < lb.size(); i++)
-    if (types[i] == KDL::BasicJointType::Continuous)
+    if (types[i] == TRAC_IK::Continuous)
       artificial_lower_limits[i] = best_x[i] - 2 * M_PI;
-    else if (types[i] == KDL::BasicJointType::TransJoint)
+    else if (types[i] == TRAC_IK::TransJoint)
       artificial_lower_limits[i] = lb[i];
     else
       artificial_lower_limits[i] = std::max(lb[i], best_x[i] - 2 * M_PI);
@@ -550,16 +496,16 @@ int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL
   std::vector<double> artificial_upper_limits(lb.size());
 
   for (uint i = 0; i < ub.size(); i++)
-    if (types[i] == KDL::BasicJointType::Continuous)
+    if (types[i] == TRAC_IK::Continuous)
       artificial_upper_limits[i] = best_x[i] + 2 * M_PI;
-    else if (types[i] == KDL::BasicJointType::TransJoint)
+    else if (types[i] == TRAC_IK::TransJoint)
       artificial_upper_limits[i] = ub[i];
     else
       artificial_upper_limits[i] = std::min(ub[i], best_x[i] + 2 * M_PI);
 
   opt.set_upper_bounds(artificial_upper_limits);
 
-  if (q_desired.data.size() == 0)
+  if (q_desired.size() == 0)
   {
     des = x;
   }
@@ -578,9 +524,8 @@ int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL
   {
   }
 
-  if (progress == -1) // Got NaNs
+  if (progress == -1)
     progress = -3;
-
 
   if (!aborted && progress < 0)
   {
@@ -589,7 +534,6 @@ int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL
 
     while (time_left > 0 && !aborted && progress < 0)
     {
-
       for (uint i = 0; i < x.size(); i++)
         x[i] = fRand(artificial_lower_limits[i], artificial_upper_limits[i]);
 
@@ -601,7 +545,7 @@ int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL
       }
       catch (...) {}
 
-      if (progress == -1) // Got NaNs
+      if (progress == -1)
         progress = -3;
 
       auto diff = std::chrono::steady_clock::now() - start_time;
@@ -609,15 +553,12 @@ int NLOPT_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL
     }
   }
 
-
   for (uint i = 0; i < x.size(); i++)
   {
     q_out(i) = best_x[i];
   }
 
   return progress;
-
 }
-
 
 }

@@ -29,7 +29,8 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************************/
 
 #include <trac_ik/trac_ik.hpp>
-#include <kdl/chainfksolverpos_recursive.hpp>
+#include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/algorithm/frames.hpp>
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -46,31 +47,58 @@ int main(int argc, char** argv) {
     std::string xml((std::istreambuf_iterator<char>(file)), {});
     const int samples = argc == 5 ? std::stoi(argv[4]) : 100;
     if (samples <= 0) throw std::invalid_argument("samples must be positive");
+
     TRAC_IK::TRAC_IK solver(argv[2], argv[3], xml, 0.05);
-    KDL::Chain chain; KDL::JntArray lower, upper;
-    solver.getKDLChain(chain); solver.getKDLLimits(lower, upper);
-    KDL::ChainFkSolverPos_recursive fk(chain);
-    KDL::JntArray target(lower.rows()), seed(lower.rows()), result;
+
+    pinocchio::Model model;
+    Eigen::VectorXd lower, upper;
+    solver.getModel(model);
+    solver.getLimits(lower, upper);
+
+    pinocchio::Data data(model);
+    pinocchio::FrameIndex tip_frame_id = model.getFrameId(argv[3]);
+
+    Eigen::VectorXd target(model.nq), seed(model.nq), result;
     std::mt19937 rng(42);
     int success = 0;
+
     for (int i = 0; i < samples; ++i) {
-      for (unsigned int j = 0; j < lower.rows(); ++j) {
-        const double lo = lower(j) <= std::numeric_limits<float>::lowest() ? -3.141592653589793 : lower(j);
-        const double hi = upper(j) >= std::numeric_limits<float>::max() ? 3.141592653589793 : upper(j);
+      for (int j = 0; j < model.nq; ++j) {
+        const double lo = lower(j) <= std::numeric_limits<float>::lowest() ? -M_PI : lower(j);
+        const double hi = upper(j) >= std::numeric_limits<float>::max() ? M_PI : upper(j);
         target(j) = std::uniform_real_distribution<double>(lo, hi)(rng);
         seed(j) = (lo + hi) / 2;
       }
-      KDL::Frame goal, actual;
-      fk.JntToCart(target, goal);
+
+      // Forward kinematics to get goal pose
+      pinocchio::forwardKinematics(model, data, target);
+      pinocchio::updateFramePlacements(model, data);
+      pinocchio::SE3 goal = data.oMf[tip_frame_id];
+
       if (solver.CartToJnt(seed, goal, result) < 0) continue;
-      fk.JntToCart(result, actual);
-      if (!KDL::Equal(goal, actual, 1e-4)) throw std::runtime_error("FK residual exceeds tolerance");
-      for (unsigned int j = 0; j < result.rows(); ++j)
+
+      // Verify FK of result
+      pinocchio::forwardKinematics(model, data, result);
+      pinocchio::updateFramePlacements(model, data);
+      pinocchio::SE3 actual = data.oMf[tip_frame_id];
+
+      // Check if poses are close
+      if (!goal.isApprox(actual, 1e-4))
+        throw std::runtime_error("FK residual exceeds tolerance");
+
+      // Check joint limits
+      for (int j = 0; j < result.size(); ++j)
         if (result(j) < lower(j)-1e-8 || result(j) > upper(j)+1e-8)
           throw std::runtime_error("Solution violates joint limits");
+
       ++success;
     }
-    std::cout << "Solved " << success << '/' << samples << "; FK tolerance 1e-4; joint limits checked\n";
+
+    std::cout << "Solved " << success << '/' << samples
+              << "; FK tolerance 1e-4; joint limits checked\n";
     return success == samples ? 0 : 1;
-  } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 2; }
+  } catch (const std::exception& e) {
+    std::cerr << e.what() << '\n';
+    return 2;
+  }
 }

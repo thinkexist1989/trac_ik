@@ -28,7 +28,6 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISE
 OF THE POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************************/
 
-
 #include <trac_ik/trac_ik.hpp>
 #include <Eigen/Geometry>
 #include <chrono>
@@ -38,27 +37,34 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <limits>
 #include <trac_ik/urdf.hpp>
 #include <stdexcept>
+#include <pinocchio/algorithm/jacobian.hpp>
+#include <pinocchio/algorithm/kinematics.hpp>
 
 namespace TRAC_IK
 {
 
 TRAC_IK::TRAC_IK(const std::string& base, const std::string& tip, const std::string& xml,
-                     double timeout, double tolerance, SolveType type) :
+                 double timeout, double tolerance, SolveType type) :
   initialized(false), eps(tolerance), maxtime(timeout), solvetype(type)
 {
-  loadURDFChain(xml, base, tip, chain, lb, ub);
+  loadURDFModel(xml, base, tip, model, lb, ub, tip_frame_id);
+  data.reset(new pinocchio::Data(model));
   initialize();
 }
 
-TRAC_IK::TRAC_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime, double _eps, SolveType _type):
+TRAC_IK::TRAC_IK(const pinocchio::Model& _model, const Eigen::VectorXd& _q_min,
+                 const Eigen::VectorXd& _q_max, pinocchio::FrameIndex _tip_frame_id,
+                 double _maxtime, double _eps, SolveType _type):
   initialized(false),
-  chain(_chain),
+  model(_model),
+  tip_frame_id(_tip_frame_id),
   lb(_q_min),
   ub(_q_max),
   eps(_eps),
   maxtime(_maxtime),
   solvetype(_type)
 {
+  data.reset(new pinocchio::Data(model));
   initialize();
 }
 
@@ -67,60 +73,63 @@ void TRAC_IK::initialize()
   if (!std::isfinite(maxtime) || maxtime <= 0 || !std::isfinite(eps) || eps <= 0)
     throw std::invalid_argument("Timeout and epsilon must be finite and positive");
 
-  if (chain.getNrOfJoints() == 0 || chain.getNrOfJoints() != lb.rows() || lb.rows() != ub.rows())
-    throw std::invalid_argument("Invalid chain or joint limit dimensions");
-  for (unsigned int i = 0; i < lb.rows(); ++i)
+  if (model.nq == 0 || model.nq != lb.size() || lb.size() != ub.size())
+    throw std::invalid_argument("Invalid model or joint limit dimensions");
+
+  for (int i = 0; i < lb.size(); ++i)
     if (!std::isfinite(lb(i)) || !std::isfinite(ub(i)) || lb(i) > ub(i))
       throw std::invalid_argument("Invalid joint limits");
 
-  jacsolver.reset(new KDL::ChainJntToJacSolver(chain));
   resetSolvers();
 
-  for (uint i = 0; i < chain.segments.size(); i++)
+  // Determine joint types
+  for (pinocchio::JointIndex i = 1; i < model.joints.size(); i++)
   {
-    std::string type = chain.segments[i].getJoint().getTypeName();
-    if (type.find("Rot") != std::string::npos)
+    const auto& joint = model.joints[i];
+    if (joint.nq() == 0) continue;
+
+    int idx = joint.idx_q();
+    if (joint.shortname() == "JointModelRX" || joint.shortname() == "JointModelRY" ||
+        joint.shortname() == "JointModelRZ" || joint.shortname() == "JointModelRUBX" ||
+        joint.shortname() == "JointModelRUBY" || joint.shortname() == "JointModelRUBZ")
     {
-      if (ub(types.size()) >= std::numeric_limits<float>::max() &&
-          lb(types.size()) <= std::numeric_limits<float>::lowest())
-        types.push_back(KDL::BasicJointType::Continuous);
+      if (ub(idx) >= std::numeric_limits<float>::max() &&
+          lb(idx) <= std::numeric_limits<float>::lowest())
+        types.push_back(Continuous);
       else
-        types.push_back(KDL::BasicJointType::RotJoint);
+        types.push_back(RotJoint);
     }
-    else if (type.find("Trans") != std::string::npos)
-      types.push_back(KDL::BasicJointType::TransJoint);
+    else if (joint.shortname() == "JointModelPX" || joint.shortname() == "JointModelPY" ||
+             joint.shortname() == "JointModelPZ")
+      types.push_back(TransJoint);
+    else
+      types.push_back(RotJoint);
   }
 
-  assert(types.size() == lb.data.size());
+  assert(types.size() == static_cast<size_t>(lb.size()));
 
   initialized = true;
 }
 
-bool TRAC_IK::unique_solution(const KDL::JntArray& sol)
+bool TRAC_IK::unique_solution(const Eigen::VectorXd& sol)
 {
-
   for (uint i = 0; i < solutions.size(); i++)
     if (myEqual(sol, solutions[i]))
       return false;
   return true;
-
 }
 
 inline void normalizeAngle(double& val, const double& min, const double& max)
 {
   if (val > max)
   {
-    //Find actual angle offset
     double diffangle = fmod(val - max, 2 * M_PI);
-    // Add that to upper bound and go back a full rotation
     val = max + diffangle - 2 * M_PI;
   }
 
   if (val < min)
   {
-    //Find actual angle offset
     double diffangle = fmod(min - val, 2 * M_PI);
-    // Add that to upper bound and go back a full rotation
     val = min - diffangle + 2 * M_PI;
   }
 }
@@ -130,16 +139,15 @@ inline void normalizeAngle(double& val, const double& target)
   normalizeAngle(val, target - M_PI, target + M_PI);
 }
 
-
 template<typename T1, typename T2>
 bool TRAC_IK::runSolver(T1& solver, T2& other_solver,
-                        const KDL::JntArray &q_init,
-                        const KDL::Frame &p_in)
+                        const Eigen::VectorXd &q_init,
+                        const pinocchio::SE3 &p_in)
 {
-  KDL::JntArray q_out;
+  Eigen::VectorXd q_out;
 
   double fulltime = maxtime;
-  KDL::JntArray seed = q_init;
+  Eigen::VectorXd seed = q_init;
 
   while (true)
   {
@@ -203,8 +211,8 @@ bool TRAC_IK::runSolver(T1& solver, T2& other_solver,
       if (!solutions.empty() && solvetype == Speed) break;
     }
 
-    for (unsigned int j = 0; j < seed.data.size(); j++)
-      if (types[j] == KDL::BasicJointType::Continuous)
+    for (int j = 0; j < seed.size(); j++)
+      if (types[j] == Continuous)
         seed(j) = fRand(q_init(j) - 2 * M_PI, q_init(j) + 2 * M_PI);
       else
         seed(j) = fRand(lb(j), ub(j));
@@ -216,16 +224,11 @@ bool TRAC_IK::runSolver(T1& solver, T2& other_solver,
   return true;
 }
 
-
-void TRAC_IK::normalize_seed(const KDL::JntArray& seed, KDL::JntArray& solution)
+void TRAC_IK::normalize_seed(const Eigen::VectorXd& seed, Eigen::VectorXd& solution)
 {
-  // Make sure rotational joint values are within 1 revolution of seed; then
-  // ensure joint limits are met.
-
-  for (uint i = 0; i < lb.data.size(); i++)
+  for (int i = 0; i < lb.size(); i++)
   {
-
-    if (types[i] == KDL::BasicJointType::TransJoint)
+    if (types[i] == TransJoint)
       continue;
 
     double target = seed(i);
@@ -233,7 +236,7 @@ void TRAC_IK::normalize_seed(const KDL::JntArray& seed, KDL::JntArray& solution)
 
     normalizeAngle(val, target);
 
-    if (types[i] == KDL::BasicJointType::Continuous)
+    if (types[i] == Continuous)
     {
       solution(i) = val;
       continue;
@@ -245,27 +248,23 @@ void TRAC_IK::normalize_seed(const KDL::JntArray& seed, KDL::JntArray& solution)
   }
 }
 
-void TRAC_IK::normalize_limits(const KDL::JntArray& seed, KDL::JntArray& solution)
+void TRAC_IK::normalize_limits(const Eigen::VectorXd& seed, Eigen::VectorXd& solution)
 {
-  // Make sure rotational joint values are within 1 revolution of middle of
-  // limits; then ensure joint limits are met.
-
-  for (uint i = 0; i < lb.data.size(); i++)
+  for (int i = 0; i < lb.size(); i++)
   {
-
-    if (types[i] == KDL::BasicJointType::TransJoint)
+    if (types[i] == TransJoint)
       continue;
 
     double target = seed(i);
 
-    if (types[i] == KDL::BasicJointType::RotJoint && types[i] != KDL::BasicJointType::Continuous)
+    if (types[i] == RotJoint && types[i] != Continuous)
       target = (ub(i) + lb(i)) / 2.0;
 
     double val = solution(i);
 
     normalizeAngle(val, target);
 
-    if (types[i] == KDL::BasicJointType::Continuous)
+    if (types[i] == Continuous)
     {
       solution(i) = val;
       continue;
@@ -275,16 +274,14 @@ void TRAC_IK::normalize_limits(const KDL::JntArray& seed, KDL::JntArray& solutio
 
     solution(i) = val;
   }
-
 }
 
-
-double TRAC_IK::manipPenalty(const KDL::JntArray& arr)
+double TRAC_IK::manipPenalty(const Eigen::VectorXd& arr)
 {
   double penalty = 1.0;
-  for (uint i = 0; i < arr.data.size(); i++)
+  for (int i = 0; i < arr.size(); i++)
   {
-    if (types[i] == KDL::BasicJointType::Continuous)
+    if (types[i] == Continuous)
       continue;
     double range = ub(i) - lb(i);
     penalty *= ((arr(i) - lb(i)) * (ub(i) - arr(i)) / (range * range));
@@ -292,66 +289,63 @@ double TRAC_IK::manipPenalty(const KDL::JntArray& arr)
   return std::max(0.0, 1.0 - exp(-1 * penalty));
 }
 
-
-double TRAC_IK::manipValue1(const KDL::JntArray& arr)
+double TRAC_IK::manipValue1(const Eigen::VectorXd& arr)
 {
-  Eigen::MatrixXd singular_values = computeSingularValues(arr);
+  Eigen::VectorXd singular_values = computeSingularValues(arr);
 
   double error = 1.0;
-  for (unsigned int i = 0; i < singular_values.rows(); ++i)
-    error *= singular_values(i, 0);
+  for (int i = 0; i < singular_values.size(); ++i)
+    error *= singular_values(i);
   return error;
 }
 
-double TRAC_IK::manipValue2(const KDL::JntArray& arr)
+double TRAC_IK::manipValue2(const Eigen::VectorXd& arr)
 {
-  Eigen::MatrixXd singular_values = computeSingularValues(arr);
-
+  Eigen::VectorXd singular_values = computeSingularValues(arr);
   return singular_values.minCoeff() / singular_values.maxCoeff();
 }
 
-double TRAC_IK::manipValue3(const KDL::JntArray& arr)
+double TRAC_IK::manipValue3(const Eigen::VectorXd& arr)
 {
-    Eigen::MatrixXd singular_values = computeSingularValues(arr);
-
-    return singular_values.minCoeff();
+  Eigen::VectorXd singular_values = computeSingularValues(arr);
+  return singular_values.minCoeff();
 }
 
-Eigen::MatrixXd TRAC_IK::computeSingularValues(const KDL::JntArray& arr)
+Eigen::VectorXd TRAC_IK::computeSingularValues(const Eigen::VectorXd& arr)
 {
-    KDL::Jacobian jac(arr.data.size());
+  pinocchio::Data::Matrix6x J(6, model.nv);
+  J.setZero();
 
-    jacsolver->JntToJac(arr, jac);
+  pinocchio::forwardKinematics(model, *data, arr);
+  pinocchio::computeFrameJacobian(model, *data, arr, tip_frame_id,
+                                   pinocchio::LOCAL_WORLD_ALIGNED, J);
 
-    Eigen::JacobiSVD<Eigen::MatrixXd> svdsolver(jac.data);
-    return svdsolver.singularValues();
+  Eigen::JacobiSVD<Eigen::MatrixXd> svdsolver(J);
+  return svdsolver.singularValues();
 }
 
-
-int TRAC_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL::JntArray &q_out, const KDL::Twist& _bounds)
+int TRAC_IK::CartToJnt(const Eigen::VectorXd &q_init, const pinocchio::SE3 &p_in,
+                       Eigen::VectorXd &q_out, const pinocchio::Motion& _bounds)
 {
-
-  if (q_init.rows() != chain.getNrOfJoints()) return -1;
+  if (q_init.size() != model.nq) return -1;
 
   if (!initialized)
   {
-    std::fprintf(stderr, "TRAC-IK was not properly initialized with a valid chain or limits.  IK cannot proceed");
+    std::fprintf(stderr, "TRAC-IK was not properly initialized with a valid model or limits.  IK cannot proceed");
     return -1;
   }
-
 
   start_time = std::chrono::steady_clock::now();
 
   nl_solver->reset();
   iksolver->reset();
 
-  // No lock as no threading yet
   solutions.clear();
   errors.clear();
 
   bounds = _bounds;
 
-  task1 = std::thread(&TRAC_IK::runKDL, this, q_init, p_in);
+  task1 = std::thread(&TRAC_IK::runPinocchioIK, this, q_init, p_in);
   task2 = std::thread(&TRAC_IK::runNLOPT, this, q_init, p_in);
 
   if (task1.joinable())
@@ -359,7 +353,6 @@ int TRAC_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL:
   if (task2.joinable())
       task2.join();
 
-  // No lock as no threading anymore
   if (solutions.empty())
   {
     q_out = q_init;
@@ -371,7 +364,7 @@ int TRAC_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL:
   case Manip1:
   case Manip2:
   case Manip3:
-    std::sort(errors.rbegin(), errors.rend()); // rbegin/rend to sort by max
+    std::sort(errors.rbegin(), errors.rend());
     break;
   default:
     std::sort(errors.begin(), errors.end());
@@ -382,7 +375,6 @@ int TRAC_IK::CartToJnt(const KDL::JntArray &q_init, const KDL::Frame &p_in, KDL:
 
   return solutions.size();
 }
-
 
 TRAC_IK::~TRAC_IK()
 {
@@ -396,4 +388,5 @@ TRAC_IK::~TRAC_IK()
   if (task2.joinable())
     task2.join();
 }
+
 }

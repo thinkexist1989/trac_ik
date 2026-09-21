@@ -35,27 +35,34 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <atomic>
 #include <cstdio>
 #include <iostream>
-#include <trac_ik/kdl_tl.hpp>
+#include <trac_ik/pinocchio_types.hpp>
 #include <nlopt.hpp>
+#include <memory>
 
+namespace TRAC_IK {
+  class TRAC_IK;
+}
 
 namespace NLOPT_IK
 {
 
 enum OptType { Joint, DualQuat, SumSq, L2 };
 
-
 class NLOPT_IK
 {
   friend class TRAC_IK::TRAC_IK;
 public:
-  NLOPT_IK(const KDL::Chain& _chain, const KDL::JntArray& _q_min, const KDL::JntArray& _q_max, double _maxtime = 0.005, double _eps = 1e-3, OptType _type = SumSq);
+  NLOPT_IK(const pinocchio::Model& _model, const Eigen::VectorXd& _q_min,
+           const Eigen::VectorXd& _q_max, pinocchio::FrameIndex _tip_frame_id,
+           double _maxtime = 0.005, double _eps = 1e-3, OptType _type = SumSq);
 
   ~NLOPT_IK() {};
-  int CartToJnt(const KDL::JntArray& q_init, const KDL::Frame& p_in, KDL::JntArray& q_out, const KDL::Twist bounds = KDL::Twist::Zero(), const KDL::JntArray& q_desired = KDL::JntArray());
+
+  int CartToJnt(const Eigen::VectorXd& q_init, const pinocchio::SE3& p_in,
+                Eigen::VectorXd& q_out, const pinocchio::Motion bounds = pinocchio::Motion::Zero(),
+                const Eigen::VectorXd& q_desired = Eigen::VectorXd());
 
   double minJoints(const std::vector<double>& x, std::vector<double>& grad);
-  //  void cartFourPointError(const std::vector<double>& x, double error[]);
   void cartSumSquaredError(const std::vector<double>& x, double error[]);
   void cartDQError(const std::vector<double>& x, double error[]);
   void cartL2NormError(const std::vector<double>& x, double error[]);
@@ -77,48 +84,44 @@ private:
     aborted = false;
   }
 
-
   std::vector<double> lb;
   std::vector<double> ub;
 
-  const KDL::Chain chain;
+  const pinocchio::Model model;
+  std::unique_ptr<pinocchio::Data> data;
+  pinocchio::FrameIndex tip_frame_id;
   std::vector<double> des;
-
-
-  KDL::ChainFkSolverPos_recursive fksolver;
 
   double maxtime;
   double eps;
   int iter_counter;
   OptType TYPE;
 
-  KDL::Frame targetPose;
-  KDL::Frame z_up ;
-  KDL::Frame x_out;
-  KDL::Frame y_out;
-  KDL::Frame z_target;
-  KDL::Frame x_target;
-  KDL::Frame y_target;
+  pinocchio::SE3 targetPose;
+  pinocchio::SE3 z_up;
+  pinocchio::SE3 x_out;
+  pinocchio::SE3 y_out;
+  pinocchio::SE3 z_target;
+  pinocchio::SE3 x_target;
+  pinocchio::SE3 y_target;
 
-  std::vector<KDL::BasicJointType> types;
+  std::vector<TRAC_IK::BasicJointType> types;
 
   nlopt::opt opt;
 
-  KDL::Frame currentPose;
+  pinocchio::SE3 currentPose;
 
   std::vector<double> best_x;
   int progress;
   std::atomic<bool> aborted{false};
 
-  KDL::Twist bounds;
+  pinocchio::Motion bounds;
 
   inline static double fRand(double min, double max)
   {
     double f = (double)rand() / RAND_MAX;
     return min + f * (max - min);
   }
-
-
 };
 
 }

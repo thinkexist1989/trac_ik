@@ -3,16 +3,23 @@ project(trac_ik_lib VERSION 2.2.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 find_package(Eigen3 REQUIRED)
-find_package(orocos_kdl REQUIRED)
+find_package(coal REQUIRED)
+find_package(pinocchio REQUIRED)
 find_package(NLopt REQUIRED)
 find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(URDFDOM REQUIRED IMPORTED_TARGET urdfdom)
-add_library(trac_ik SHARED src/kdl_tl.cpp src/nlopt_ik.cpp src/trac_ik.cpp src/urdf.cpp)
+add_library(trac_ik SHARED src/pinocchio_tl.cpp src/nlopt_ik.cpp src/trac_ik.cpp src/urdf.cpp)
 add_library(trac_ik::trac_ik ALIAS trac_ik)
 target_compile_features(trac_ik PUBLIC cxx_std_17)
-target_include_directories(trac_ik PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include> ${orocos_kdl_INCLUDE_DIRS})
-target_link_libraries(trac_ik PUBLIC Eigen3::Eigen ${orocos_kdl_LIBRARIES} ${NLOPT_LIBRARIES} Threads::Threads PRIVATE PkgConfig::URDFDOM)
+target_include_directories(trac_ik PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(trac_ik PUBLIC
+  Eigen3::Eigen
+  pinocchio::pinocchio
+  ${NLOPT_LIBRARIES}
+  Threads::Threads
+)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(TARGETS trac_ik EXPORT trac_ikTargets LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(EXPORT trac_ikTargets NAMESPACE trac_ik:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/trac_ik)
