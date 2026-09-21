@@ -1,10 +1,13 @@
-# PIN-IK
+# PIN-IK (Pinocchio Inverse Kinematics)
 
 独立的 C++17/Python 3 逆运动学求解器，基于 Pinocchio 4.x 运动学库和 NLopt 优化器。
+
+PIN-IK 是从 TRAC-IK 迁移到 Pinocchio 的版本，完全移除了 KDL 依赖，使用更现代的 Pinocchio 库。
 
 **特点**：
 - 双线程并行求解（Jacobian 迭代 + NLopt 优化）
 - 五种求解模式：Speed、Distance、Manip1、Manip2、Manip3
+- 基于 Pinocchio 4.x（支持连续关节和流形几何）
 - 完全独立，无需 ROS、catkin、ament、MoveIt 或参数服务器
 - 支持 C++ 和 Python 接口
 
@@ -276,19 +279,22 @@ BSD 3-Clause License - 详见 [LICENSE.txt](LICENSE.txt)
 
 ## 致谢
 
-- 原始 PIN-IK: TRACLabs, Inc.
+- 原始 TRAC-IK: TRACLabs, Inc.
+- PIN-IK (Pinocchio 移植): 基于 TRAC-IK 架构
 - Pinocchio: LAAS-CNRS 和 INRIA
 - NLopt: Steven G. Johnson
 
 ## 引用
 
-如果在研究中使用 PIN-IK，请引用：
+如果在研究中使用本库，请引用原始 TRAC-IK 论文：
 
 ```bibtex
 @inproceedings{beeson2015trac,
-  title={PIN-IK: An open-source library for improved solving of generic inverse kinematics},
+  title={TRAC-IK: An open-source library for improved solving of generic inverse kinematics},
   author={Beeson, Patrick and Ames, Barrett},
   booktitle={IEEE-RAS International Conference on Humanoid Robots},
   year={2015}
 }
 ```
+
+PIN-IK 是 TRAC-IK 的 Pinocchio 4.x 移植版本，保持了原有的双线程求解架构。

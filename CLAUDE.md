@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PIN-IK is a standalone C++17 inverse kinematics solver using Pinocchio 4.x for kinematics and NLopt for optimization. It's been migrated from Orocos KDL to Pinocchio and made fully independent of ROS.
+PIN-IK (Pinocchio Inverse Kinematics) is a standalone C++17 inverse kinematics solver using Pinocchio 4.x for kinematics and NLopt for optimization. It's a port of TRAC-IK from Orocos KDL to Pinocchio, made fully independent of ROS.
 
 **Key characteristic**: Dual-threaded solving with configurable optimization modes (Speed, Distance, Manip1/2/3).
+
+**Naming**: PIN-IK (Pinocchio IK) avoids conflicts with the original TRAC-IK (KDL-based) and clearly indicates the use of Pinocchio library.
 
 ## Build Commands
 

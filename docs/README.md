@@ -1,6 +1,8 @@
 # PIN-IK 文档
 
-本目录包含 PIN-IK 从 KDL 到 Pinocchio 4.x 迁移的详细技术文档。
+本目录包含 PIN-IK (Pinocchio Inverse Kinematics) 从 KDL 到 Pinocchio 4.x 迁移的详细技术文档。
+
+**项目说明**: PIN-IK 是 TRAC-IK 的 Pinocchio 移植版本，完全移除了 KDL 依赖，使用更现代的 Pinocchio 库。
 
 ## 文档列表
 
