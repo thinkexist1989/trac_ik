@@ -117,7 +117,8 @@ int ChainIkSolverPos_TL::CartToJnt(const Eigen::VectorXd &q_init, const pinocchi
     if (isMotionZero(delta_twist, eps))
       return 1;
 
-    // Compute delta_twist in the world frame
+    // log6(current^-1 * target) is expressed in the current tip's local frame.
+    // Use a LOCAL Jacobian so the error and Jacobian share the same axes.
     pinocchio::SE3 diff = f.actInv(p_in);
     delta_twist = pinocchio::log6(diff);
 
@@ -125,7 +126,7 @@ int ChainIkSolverPos_TL::CartToJnt(const Eigen::VectorXd &q_init, const pinocchi
     pinocchio::Data::Matrix6x J(6, model.nv);
     J.setZero();
     pinocchio::computeFrameJacobian(model, *data, q_out, tip_frame_id,
-                                     pinocchio::LOCAL_WORLD_ALIGNED, J);
+                                     pinocchio::LOCAL, J);
 
     // Solve for delta_q using pseudo-inverse
     Eigen::VectorXd twist_vec(6);
