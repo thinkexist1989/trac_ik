@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PIN-IK (Pinocchio Inverse Kinematics) is a standalone C++17 inverse kinematics solver using Pinocchio 4.x for kinematics and NLopt for optimization. It's a port of TRAC-IK from Orocos KDL to Pinocchio, made fully independent of ROS.
+PIN-IK (Pinocchio Inverse Kinematics) is a standalone C++17 inverse kinematics solver using Pinocchio 3.9.0 for kinematics and NLopt for optimization. It's a port of TRAC-IK from Orocos KDL to Pinocchio, made fully independent of ROS.
 
 **Key characteristic**: Dual-threaded solving with configurable optimization modes (Speed, Distance, Manip1/2/3).
 
@@ -24,7 +24,7 @@ ctest --test-dir build --output-on-failure
 ./build/tests/standalone_tests tests/robot.urdf
 
 # Run example
-./build/pin_ik_examples/ik_tests tests/robot.urdf base tip 100
+./build/examples/ik_tests tests/robot.urdf base tip 100
 
 # Clean rebuild
 rm -rf build && cmake -S . -B build && cmake --build build -j$(nproc)
@@ -49,7 +49,7 @@ rm -rf build && cmake -S . -B build && cmake --build build -j$(nproc)
    - Objective functions: `cartSumSquaredError()` or `cartDQError()` (dual quaternion)
    - NLopt manages configuration updates internally
 
-### Pinocchio 4.x Integration
+### Pinocchio 3.9.0 Integration
 
 **Key difference from KDL**: Continuous joints use 2-DOF representation (cos θ, sin θ) instead of 1-DOF angle.
 
@@ -81,7 +81,7 @@ Joint 6: continuous (idx_q=5-6, 2 DOF: cos, sin)
 
 ### 1. Configuration Space Updates
 ```cpp
-// ❌ WRONG (Pinocchio 4.x)
+// ❌ WRONG (Pinocchio 3.9.0)
 q_new = q + delta_q;
 
 // ✅ CORRECT
@@ -114,7 +114,7 @@ To verify IK works:
 
 **Completed** (commit d53dbfe):
 - ✅ All KDL code removed
-- ✅ Pinocchio 4.x integration
+- ✅ Pinocchio 3.9.0 integration
 - ✅ `pinocchio::integrate()` implemented
 - ✅ Core library compiles and links
 
@@ -133,7 +133,7 @@ To verify IK works:
 
 ## Dependencies
 
-- Pinocchio 4.x (`/opt/openrobots`)
+- Pinocchio 3.9.0 (`/opt/openrobots`)
 - Eigen3
 - NLopt
 - urdfdom (standalone, not ROS)
@@ -144,14 +144,6 @@ To verify IK works:
 See `docs/` folder:
 - **MIGRATION_STATUS.md**: Migration progress tracking
 - **FINAL_STATUS.md**: Complete status summary
-- **NEXT_STEPS.md**: Pinocchio 4.x continuous joint adaptation guide
+- **NEXT_STEPS.md**: Pinocchio 3.9.0 continuous joint adaptation guide
 - **JACOBIAN_DETAILS.md**: Technical explanation of configuration vs velocity space
 - **README_PINOCCHIO.md**: Pinocchio usage guide
-
-## Python Bindings
-
-Built with SWIG, installed to `build/lib`. Set `PYTHONPATH` to use:
-```bash
-export PYTHONPATH=/path/to/build/lib:$PYTHONPATH
-python3 -c "from pin_ik_python.pin_ik import IK; print('OK')"
-```

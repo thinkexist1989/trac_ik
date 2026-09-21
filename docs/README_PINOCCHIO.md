@@ -1,3 +1,5 @@
+> 历史记录：仓库现为纯 C++ 项目，Python 绑定及 SWIG 依赖已删除，文中相关内容不再适用。
+
 > 历史迁移记录：当前 Pinocchio 3.9.0 实现及连续关节接口见 [文档首页](README.md)。本文中的进度与版本差异描述可能已过时。
 
 # PIN-IK with Pinocchio
@@ -188,7 +190,7 @@ cd build
 ./tests/standalone_tests /path/to/test.urdf
 
 # 运行 IK 测试
-./pin_ik_examples/ik_tests /path/to/robot.urdf base_link tip_link 100
+./examples/ik_tests /path/to/robot.urdf base_link tip_link 100
 ```
 
 ## 与 KDL 版本的区别

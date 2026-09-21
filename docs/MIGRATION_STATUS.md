@@ -1,3 +1,5 @@
+> 历史记录：仓库现为纯 C++ 项目，Python 绑定及 SWIG 依赖已删除，文中相关内容不再适用。
+
 > 历史迁移记录：当前 Pinocchio 3.9.0 实现及连续关节接口见 [文档首页](README.md)。本文中的进度与版本差异描述可能已过时。
 
 # PIN-IK 迁移状态报告
@@ -92,7 +94,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release \
          -DBUILD_TESTING=OFF
 make -j$(nproc)
 
-# 输出：build/pin_ik_lib/libpin_ik.so
+# 输出：build/libpin_ik.so
 ```
 
 ## 下一步建议
@@ -126,28 +128,28 @@ make -j$(nproc)
 ## 文件清单
 
 ### 新增文件
-- pin_ik_lib/include/pin_ik/pinocchio_types.hpp
-- pin_ik_lib/include/pin_ik/pinocchio_tl.hpp
-- pin_ik_lib/src/pinocchio_tl.cpp
+- include/pin_ik/pinocchio_types.hpp
+- include/pin_ik/pinocchio_tl.hpp
+- src/pinocchio_tl.cpp
 - MIGRATION_REPORT.md
 - README_PINOCCHIO.md
 
 ### 修改文件
-- pin_ik_lib/include/pin_ik/nlopt_ik.hpp
-- pin_ik_lib/src/nlopt_ik.cpp
-- pin_ik_lib/include/pin_ik/pin_ik.hpp
-- pin_ik_lib/src/pin_ik.cpp
-- pin_ik_lib/include/pin_ik/urdf.hpp
-- pin_ik_lib/src/urdf.cpp
-- pin_ik_lib/CMakeLists.txt
+- include/pin_ik/nlopt_ik.hpp
+- src/nlopt_ik.cpp
+- include/pin_ik/pin_ik.hpp
+- src/pin_ik.cpp
+- include/pin_ik/urdf.hpp
+- src/urdf.cpp
+- CMakeLists.txt
 - cmake/pin_ikConfig.cmake.in
-- pin_ik_examples/src/ik_tests.cpp
+- examples/src/ik_tests.cpp
 - tests/standalone_tests.cpp
-- pin_ik_python/swig/pin_ik_wrap.i
+- python/swig/pin_ik_wrap.i
 
 ### 删除文件
-- pin_ik_lib/include/pin_ik/kdl_tl.hpp
-- pin_ik_lib/src/kdl_tl.cpp
+- include/pin_ik/kdl_tl.hpp
+- src/kdl_tl.cpp
 
 ## 结论
 

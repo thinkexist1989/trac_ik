@@ -2,13 +2,22 @@
 
 当前版本基于 **Pinocchio 3.9.0**，保留 TRAC-IK 的 Newton / NLopt 双求解器。
 
+## 仓库目录
+
+- `include/`：核心 C++ 库公共头文件。
+- `src/`：核心 C++ 库及求解器实现。
+- `examples/`：C++ 示例，构建产物为 `build/examples/ik_tests`。
+
+- `tests/`：自动化测试、测试模型和 `manual/` 手动诊断程序。
+- `scripts/`：维护及历史迁移脚本。
+
 ## 构建与使用
 
 参见 [主 README](../README.md)。CMake 固定要求 Pinocchio 3.9.0，升级或降级依赖后请使用新的构建目录。
 
 ## 连续旋转关节
 
-C++ / Python 的关节输入、输出、限位长度均为 `model.nv`，每个关节一个标量。连续旋转关节使用弧度，允许多圈角度，限位为 `(-inf, +inf)`，返回靠近 seed 的等价解。
+C++ 的关节输入、输出、限位长度均为 `model.nv`，每个关节一个标量。连续旋转关节使用弧度，允许多圈角度，限位为 `(-inf, +inf)`，返回靠近 seed 的等价解。
 
 Pinocchio 3.9.0 的原生连续关节仍使用 `(cos θ, sin θ)`，即 `nq=2, nv=1`。例如六个关节中有一个 continuous 时，IK 输入长度为 6，Pinocchio 配置长度为 7。调用原生 FK 前使用 `PIN_IK::toPinocchioConfiguration(model, angles)` 转换。
 
@@ -24,7 +33,7 @@ cmake --build build-3.9 -j2
 ctest --test-dir build-3.9 --output-on-failure
 ```
 
-测试覆盖五种求解模式、独立 Newton / NLopt 连续关节求解、跨 ±π 和多圈 seed、非根 base、100 个六轴目标、Python 接口、非法参数与超时。
+测试覆盖五种求解模式、独立 Newton / NLopt 连续关节求解、跨 ±π 和多圈 seed、非根 base、100 个六轴目标、非法参数与超时。
 
 ## 历史文档
 

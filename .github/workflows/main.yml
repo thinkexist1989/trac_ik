@@ -11,9 +11,18 @@ jobs:
       - name: Install standalone dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ pkg-config libeigen3-dev libnlopt-cxx-dev liburdfdom-dev swig python3-dev python3-pip
-          python3 -m pip install "pin==3.9.0"
-          echo "CMAKE_PREFIX_PATH=$(python3 -c 'import cmeel; from pathlib import Path; print(Path(cmeel.__file__).parent.parent)')/cmeel.prefix" >> "$GITHUB_ENV"
+          sudo apt-get install -y cmake g++ git pkg-config libeigen3-dev libnlopt-cxx-dev liburdfdom-dev libboost-filesystem-dev libboost-serialization-dev
+      - name: Build Pinocchio 3.9.0 (C++ only)
+        run: |
+          git clone --branch v3.9.0 --depth 1 --recurse-submodules --shallow-submodules https://github.com/stack-of-tasks/pinocchio.git "$RUNNER_TEMP/pinocchio"
+          cmake -S "$RUNNER_TEMP/pinocchio" -B "$RUNNER_TEMP/pinocchio-build" \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/pinocchio-install" \
+            -DBUILD_PYTHON_INTERFACE=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF \
+            -DBUILD_WITH_COLLISION_SUPPORT=OFF
+          cmake --build "$RUNNER_TEMP/pinocchio-build" -j2
+          cmake --install "$RUNNER_TEMP/pinocchio-build"
+          echo "CMAKE_PREFIX_PATH=$RUNNER_TEMP/pinocchio-install" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/pinocchio-install/lib" >> "$GITHUB_ENV"
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
       - name: Build

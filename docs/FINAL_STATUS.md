@@ -1,3 +1,5 @@
+> 历史记录：仓库现为纯 C++ 项目，Python 绑定及 SWIG 依赖已删除，文中相关内容不再适用。
+
 > 历史迁移记录：当前 Pinocchio 3.9.0 实现及连续关节接口见 [文档首页](README.md)。本文中的进度与版本差异描述可能已过时。
 
 # PIN-IK 迁移到 Pinocchio 4.x - 最终状态报告
@@ -72,26 +74,26 @@ sudo make install
 ## 📁 已交付的文件
 
 ### 新增文件
-- `pin_ik_lib/include/pin_ik/pinocchio_types.hpp` - Pinocchio 类型定义
-- `pin_ik_lib/include/pin_ik/pinocchio_tl.hpp` - Pinocchio IK 求解器头文件
-- `pin_ik_lib/src/pinocchio_tl.cpp` - Pinocchio IK 求解器实现
+- `include/pin_ik/pinocchio_types.hpp` - Pinocchio 类型定义
+- `include/pin_ik/pinocchio_tl.hpp` - Pinocchio IK 求解器头文件
+- `src/pinocchio_tl.cpp` - Pinocchio IK 求解器实现
 - `MIGRATION_STATUS.md` - 迁移状态文档
 - `MIGRATION_REPORT.md` - 详细技术文档
 - `README_PINOCCHIO.md` - Pinocchio 使用指南
 
 ### 修改文件
-- `pin_ik_lib/include/pin_ik/nlopt_ik.hpp`
-- `pin_ik_lib/src/nlopt_ik.cpp`
-- `pin_ik_lib/include/pin_ik/pin_ik.hpp`
-- `pin_ik_lib/src/pin_ik.cpp`
-- `pin_ik_lib/include/pin_ik/urdf.hpp`
-- `pin_ik_lib/src/urdf.cpp`
-- `pin_ik_lib/CMakeLists.txt`
+- `include/pin_ik/nlopt_ik.hpp`
+- `src/nlopt_ik.cpp`
+- `include/pin_ik/pin_ik.hpp`
+- `src/pin_ik.cpp`
+- `include/pin_ik/urdf.hpp`
+- `src/urdf.cpp`
+- `CMakeLists.txt`
 - `cmake/pin_ikConfig.cmake.in`
 
 ### 删除文件
-- `pin_ik_lib/include/pin_ik/kdl_tl.hpp`
-- `pin_ik_lib/src/kdl_tl.cpp`
+- `include/pin_ik/kdl_tl.hpp`
+- `src/kdl_tl.cpp`
 
 ## 🎯 技术细节
 

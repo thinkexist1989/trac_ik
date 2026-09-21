@@ -3,7 +3,7 @@
 Build from the repository root, then run:
 
 ```sh
-build/pin_ik_examples/ik_tests tests/robot.urdf base tip 100
+build/examples/ik_tests tests/robot.urdf base tip 100
 ```
 
 Arguments: URDF file, base link, tip link, optional number of random samples.

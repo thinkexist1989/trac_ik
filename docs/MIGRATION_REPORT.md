@@ -1,3 +1,5 @@
+> 历史记录：仓库现为纯 C++ 项目，Python 绑定及 SWIG 依赖已删除，文中相关内容不再适用。
+
 > 历史迁移记录：当前 Pinocchio 3.9.0 实现及连续关节接口见 [文档首页](README.md)。本文中的进度与版本差异描述可能已过时。
 
 # PIN-IK 从 KDL 迁移到 Pinocchio - 完成报告
@@ -9,22 +11,22 @@
 已将所有 KDL 数据结构和函数替换为 Pinocchio 等价物：
 
 #### 新增文件：
-- `pin_ik_lib/include/pin_ik/pinocchio_types.hpp` - Pinocchio 类型定义和辅助函数
-- `pin_ik_lib/include/pin_ik/pinocchio_tl.hpp` - Pinocchio 版本的 IK 求解器头文件
-- `pin_ik_lib/src/pinocchio_tl.cpp` - Pinocchio 版本的 IK 求解器实现
+- `include/pin_ik/pinocchio_types.hpp` - Pinocchio 类型定义和辅助函数
+- `include/pin_ik/pinocchio_tl.hpp` - Pinocchio 版本的 IK 求解器头文件
+- `src/pinocchio_tl.cpp` - Pinocchio 版本的 IK 求解器实现
 
 #### 修改文件：
-- `pin_ik_lib/include/pin_ik/nlopt_ik.hpp` - 更新为使用 Pinocchio 数据类型
-- `pin_ik_lib/src/nlopt_ik.cpp` - 更新为使用 Pinocchio 运动学函数
-- `pin_ik_lib/include/pin_ik/pin_ik.hpp` - 更新主接口为 Pinocchio
-- `pin_ik_lib/src/pin_ik.cpp` - 更新主实现为 Pinocchio
-- `pin_ik_lib/include/pin_ik/urdf.hpp` - 更新 URDF 加载接口
-- `pin_ik_lib/src/urdf.cpp` - 使用 Pinocchio 的 URDF 解析器
-- `pin_ik_lib/CMakeLists.txt` - 替换 orocos_kdl 依赖为 pinocchio
+- `include/pin_ik/nlopt_ik.hpp` - 更新为使用 Pinocchio 数据类型
+- `src/nlopt_ik.cpp` - 更新为使用 Pinocchio 运动学函数
+- `include/pin_ik/pin_ik.hpp` - 更新主接口为 Pinocchio
+- `src/pin_ik.cpp` - 更新主实现为 Pinocchio
+- `include/pin_ik/urdf.hpp` - 更新 URDF 加载接口
+- `src/urdf.cpp` - 使用 Pinocchio 的 URDF 解析器
+- `CMakeLists.txt` - 替换 orocos_kdl 依赖为 pinocchio
 
 #### 删除文件：
-- `pin_ik_lib/include/pin_ik/kdl_tl.hpp` (已删除)
-- `pin_ik_lib/src/kdl_tl.cpp` (已删除)
+- `include/pin_ik/kdl_tl.hpp` (已删除)
+- `src/kdl_tl.cpp` (已删除)
 
 ### 2. 数据类型映射
 
@@ -48,12 +50,12 @@
 
 ### 4. 测试和示例更新
 
-- `pin_ik_examples/src/ik_tests.cpp` - 更新为使用 Pinocchio API
+- `examples/src/ik_tests.cpp` - 更新为使用 Pinocchio API
 - `tests/standalone_tests.cpp` - 更新为使用 Pinocchio API
 
 ### 5. Python 绑定更新
 
-- `pin_ik_python/swig/pin_ik_wrap.i` - 更新 SWIG 接口为 Pinocchio
+- `python/swig/pin_ik_wrap.i` - 更新 SWIG 接口为 Pinocchio
 
 ### 6. CMake 配置更新
 
@@ -103,7 +105,7 @@ make -j$(nproc)
 # 假设有一个测试 URDF 文件
 cd build
 ./tests/standalone_tests <path_to_test_urdf>
-./pin_ik_examples/ik_tests <path_to_urdf> base_link tip_link 100
+./examples/ik_tests <path_to_urdf> base_link tip_link 100
 ```
 
 ### 4. 安装库

@@ -1,3 +1,5 @@
+> 历史记录：仓库现为纯 C++ 项目，Python 绑定及 SWIG 依赖已删除，文中相关内容不再适用。
+
 > 历史迁移记录：当前 Pinocchio 3.9.0 实现及连续关节接口见 [文档首页](README.md)。本文中的进度与版本差异描述可能已过时。
 
 # 下一步：适配 Pinocchio 4.x 连续关节
@@ -106,15 +108,15 @@ for (size_t i = 0; i < joint_ids.size(); ++i) {
 
 ## 需要修改的文件
 
-1. **pin_ik_lib/src/urdf.cpp**
+1. **src/urdf.cpp**
    - 添加连续关节检测
    - 返回关节类型信息
 
-2. **pin_ik_lib/src/pinocchio_tl.cpp**
+2. **src/pinocchio_tl.cpp**
    - 添加配置空间转换
    - 处理连续关节的雅可比
 
-3. **pin_ik_lib/src/nlopt_ik.cpp**
+3. **src/nlopt_ik.cpp**
    - 更新优化变量映射
    - 处理连续关节的限制
 
@@ -280,7 +282,7 @@ while (!converged) {
 这是最快的路径，保持现有架构：
 
 ```bash
-# 1. 编辑 pin_ik_lib/src/urdf.cpp
+# 1. 编辑 src/urdf.cpp
 # 2. 修改 loadURDFModel 使用子配置向量
 # 3. 在 pinocchio_tl.cpp 中映射配置
 # 4. 重新编译测试

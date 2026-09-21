@@ -1,6 +1,6 @@
 # PIN-IK (Pinocchio Inverse Kinematics)
 
-独立的 C++17/Python 3 逆运动学求解器，基于 Pinocchio 3.9.0 运动学库和 NLopt 优化器。
+独立的 C++17 逆运动学求解器，基于 Pinocchio 3.9.0 运动学库和 NLopt 优化器。
 
 PIN-IK 是从 TRAC-IK 迁移到 Pinocchio 的版本，完全移除了 KDL 依赖，使用更现代的 Pinocchio 库。
 
@@ -9,21 +9,45 @@ PIN-IK 是从 TRAC-IK 迁移到 Pinocchio 的版本，完全移除了 KDL 依赖
 - 五种求解模式：Speed、Distance、Manip1、Manip2、Manip3
 - 基于 Pinocchio 3.9.0（支持连续关节和流形几何）
 - 完全独立，无需 ROS、catkin、ament、MoveIt 或参数服务器
-- 支持 C++ 和 Python 接口
+- 提供 C++ 接口
+
+## 仓库结构
+
+```text
+include/      核心 C++ 库公共头文件
+src/          核心 C++ 库及求解器实现
+examples/     C++ 示例程序
+tests/        C++ 自动化测试及测试模型
+  manual/     按需构建的手动诊断程序
+scripts/      维护脚本（含历史迁移脚本）
+docs/         技术文档
+cmake/        安装包配置
+```
+
+目录使用说明见 [测试目录](tests/README.md) 和 [维护脚本](scripts/README.md)。
+
+可通过 `PIN_IK_BUILD_EXAMPLES=OFF` 关闭对应组件。
+
+仅构建核心库：
+
+```bash
+cmake -S . -B build-lib -DCMAKE_PREFIX_PATH=/usr/local \
+  -DPIN_IK_BUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF
+cmake --build build-lib -j2
+```
 
 ## 依赖
 
 ### 必需
-- **CMake** ≥ 3.10
+- **CMake** ≥ 3.16
 - **C++17** 编译器（GCC ≥ 7, Clang ≥ 5）
 - **Eigen3** - 线性代数库
-- **Pinocchio** ≥ 4.0 - 刚体动力学库（运动学）
+- **Pinocchio** 3.9.0 - 刚体动力学库（运动学）
 - **NLopt** - 非线性优化库
 - **urdfdom** - URDF 解析（独立版本，非 ROS）
 - **Boost** - 序列化支持
 
 ### 可选
-- **Python 3** + **SWIG** - 用于 Python 绑定
 - **pkg-config** - 简化依赖查找
 
 ## 安装依赖
@@ -45,8 +69,6 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/openrobots \
 make -j$(nproc)
 sudo make install
 
-# Python 绑定（可选）
-sudo apt-get install swig python3-dev python3-numpy
 ```
 
 ## 编译
@@ -69,14 +91,9 @@ ctest --test-dir build --output-on-failure
 
 ### 构建选项
 ```bash
-# 禁用 Python 绑定
-cmake -S . -B build -DPIN_IK_BUILD_PYTHON=OFF
-
 # 禁用示例
 cmake -S . -B build -DPIN_IK_BUILD_EXAMPLES=OFF
 
-# 同时禁用两者
-cmake -S . -B build -DPIN_IK_BUILD_PYTHON=OFF -DPIN_IK_BUILD_EXAMPLES=OFF
 ```
 
 ## 安装
@@ -96,7 +113,6 @@ cmake --install build --prefix /path/to/install
 - 头文件：`<prefix>/include/pin_ik/`
 - 库文件：`<prefix>/lib/libpin_ik.so`
 - CMake 配置：`<prefix>/lib/cmake/pin_ik/`
-- Python 模块：`<prefix>/lib/python3.x/site-packages/pin_ik_python/`
 
 ## 使用
 
@@ -146,31 +162,6 @@ if (solver.getSolutions(solutions)) {
 }
 ```
 
-### Python API
-
-```python
-from pin_ik_python.pin_ik import IK
-
-# 创建求解器
-ik_solver = IK("base_link", "tip_link", urdf_string="...",
-               timeout=0.005, epsilon=1e-5, solve_type="Speed")
-
-# 设置初始关节角度
-seed_state = [0.0] * num_joints
-
-# 目标位姿（x, y, z, rx, ry, rz, rw 四元数）
-x, y, z = 0.5, 0.0, 0.5
-qx, qy, qz, qw = 0.0, 0.0, 0.0, 1.0
-
-# 求解
-solution = ik_solver.CartToJnt(seed_state, x, y, z, qx, qy, qz, qw)
-
-if solution:
-    print("找到解:", solution)
-else:
-    print("未找到解")
-```
-
 ### CMake 集成
 
 ```cmake
@@ -184,7 +175,7 @@ target_link_libraries(my_app pin_ik::pin_ik)
 
 ```bash
 # 运行 C++ 示例（100 次随机测试）
-./build/pin_ik_examples/ik_tests tests/robot.urdf base tip 100
+./build/examples/ik_tests tests/robot.urdf base tip 100
 
 # 运行独立测试
 ./build/tests/standalone_tests tests/robot.urdf
@@ -208,7 +199,7 @@ target_link_libraries(my_app pin_ik::pin_ik)
 
 CMake 要求 `pinocchio 3.9.0 EXACT`，构建目录应重新配置以清除旧版本缓存。
 
-- C++ 和 Python 的 seed、解和限位均为 `model.nv` 个标量，连续关节使用弧度，可传入多圈角度。
+- C++ 的 seed、解和限位均为 `model.nv` 个标量，连续关节使用弧度，可传入多圈角度。
 - 连续关节的限位为 `(-inf, +inf)`，求解结果会选择靠近 seed 的等价角度。
 - `getModel()` 返回原生 Pinocchio 模型：连续关节仍占两个配置分量 `(cos θ, sin θ)`，所以 `model.nq` 可能大于 `model.nv`。这在 3.9.0 中同样成立。
 - 直接调用 Pinocchio FK 时使用 `PIN_IK::toPinocchioConfiguration(model, angles)` 转换。不要把 IK 返回的角度向量直接当作 Pinocchio 配置。
@@ -236,7 +227,7 @@ pinocchio::forwardKinematics(model, data, q);
 - ✅ 所有 KDL 依赖已移除
 - ✅ 核心库完全可用
 - ✅ 编译和链接成功
-- 测试覆盖 C++、Python、连续关节及 FK 残差
+- 测试覆盖 C++、连续关节及 FK 残差
 
 ## 限制
 
@@ -250,11 +241,6 @@ pinocchio::forwardKinematics(model, data, q);
 ### Pinocchio 未找到
 ```bash
 export CMAKE_PREFIX_PATH=/opt/openrobots:$CMAKE_PREFIX_PATH
-```
-
-### Python 绑定未找到
-```bash
-export PYTHONPATH=/path/to/build/lib:$PYTHONPATH
 ```
 
 ### 链接错误
